@@ -2323,6 +2323,7 @@ GameObject:
   - component: {fileID: 690067451}
   - component: {fileID: 690067455}
   - component: {fileID: 690067456}
+  - component: {fileID: 690067457}
   m_Layer: 0
   m_Name: GestureManager
   m_TagString: Untagged
@@ -2488,6 +2489,33 @@ MonoBehaviour:
   loadedTemplateCount: 0
   knownGestures: []
   ready: 0
+--- !u!114 &690067457
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 690067448}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d62533aa1b54c20a53112f37ad4bb2b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::TranslateRegionCapture
+  indexTip: {fileID: 443043344}
+  pinchAction: {fileID: 187161793506945269, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  msgSender: {fileID: 1234129723}
+  referenceCamera: {fileID: 1948693200}
+  pinchValueThreshold: 0.7
+  maxAnchorMoveDistance: 0.035
+  minAnchorHoldSeconds: 0.08
+  maxAnchorHoldSeconds: 0.75
+  minSampleDistance: 0.008
+  minDrawPointCount: 6
+  minViewportSize: {x: 0.03, y: 0.03}
+  drawTimeoutSeconds: 6
+  previewLine: {fileID: 0}
+  hidePreviewWhenIdle: 1
+  gestureName: Translate
 --- !u!1001 &691032629
 PrefabInstance:
   m_ObjectHideFlags: 0

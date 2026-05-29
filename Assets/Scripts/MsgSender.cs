@@ -192,6 +192,49 @@ public class MsgSender : MonoBehaviour
         SendPacket(msg);
     }
 
+    /// <summary>
+    /// Send a camera-frame region selected for translation.
+    /// Wire format:
+    ///   TRANSLATE_REGION,seq,time,xMin,yMin,xMax,yMax,anchorX,anchorY
+    ///
+    /// Coordinates are normalized viewport values in [0, 1], where (0, 0) is the
+    /// bottom-left of the Unity camera view.
+    /// </summary>
+    public void SendTranslateRegion(Rect viewportRect, Vector2 anchorViewport)
+    {
+        Rect safeRect = ClampViewportRect(viewportRect);
+        Vector2 safeAnchor = new Vector2(
+            Mathf.Clamp01(anchorViewport.x),
+            Mathf.Clamp01(anchorViewport.y)
+        );
+
+        string msg = string.Join(",",
+            "TRANSLATE_REGION",
+            seq.ToString(CultureInfo.InvariantCulture),
+            Time.unscaledTime.ToString("F4", CultureInfo.InvariantCulture),
+            safeRect.xMin.ToString("F6", CultureInfo.InvariantCulture),
+            safeRect.yMin.ToString("F6", CultureInfo.InvariantCulture),
+            safeRect.xMax.ToString("F6", CultureInfo.InvariantCulture),
+            safeRect.yMax.ToString("F6", CultureInfo.InvariantCulture),
+            safeAnchor.x.ToString("F6", CultureInfo.InvariantCulture),
+            safeAnchor.y.ToString("F6", CultureInfo.InvariantCulture)
+        );
+
+        Debug.Log($"[SENDER] Sending TRANSLATE_REGION: {msg}");
+
+        seq++;
+        SendPacket(msg);
+    }
+
+    static Rect ClampViewportRect(Rect rect)
+    {
+        float xMin = Mathf.Clamp01(Mathf.Min(rect.xMin, rect.xMax));
+        float yMin = Mathf.Clamp01(Mathf.Min(rect.yMin, rect.yMax));
+        float xMax = Mathf.Clamp01(Mathf.Max(rect.xMin, rect.xMax));
+        float yMax = Mathf.Clamp01(Mathf.Max(rect.yMin, rect.yMax));
+        return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+    }
+
     private void SendPacket(string msg)
     {
         if (client == null)
