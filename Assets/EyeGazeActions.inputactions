@@ -1,0 +1,75 @@
+{
+    "version": 1,
+    "name": "EyeGazeActions",
+    "maps": [
+        {
+            "name": "EyeGaze",
+            "id": "a28939c7-a8cb-4713-894d-3c863c21fb03",
+            "actions": [
+                {
+                    "name": "GazePosition",
+                    "type": "Value",
+                    "id": "9728c5bd-b791-49c6-99f5-04c971a72495",
+                    "expectedControlType": "Vector3",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "GazeRotation",
+                    "type": "Value",
+                    "id": "3e1bd461-06b7-48b6-ad86-0a6b8317591a",
+                    "expectedControlType": "Quaternion",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                },
+                {
+                    "name": "GazeState",
+                    "type": "Value",
+                    "id": "b3666d03-b3d6-4d6b-95e7-26889f6ab567",
+                    "expectedControlType": "Integer",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": true
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "912f0f7f-aa5c-49c8-91ac-e1a5a444b16b",
+                    "path": "<EyeGaze>/pose/position",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "GazePosition",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "ef812dd1-d37f-4ca3-bc91-df9566584325",
+                    "path": "<EyeGaze>/pose/rotation",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "GazeRotation",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "5583100a-b38a-4bda-ae5c-61d52fc222c3",
+                    "path": "<EyeGaze>/trackingState",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "GazeState",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        }
+    ],
+    "controlSchemes": []
+}
