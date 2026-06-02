@@ -27,6 +27,7 @@ public class Camera2FrameReceiver : MonoBehaviour
     private Texture2D latestTexture;
     private Texture2D debugTexture;
     private byte[] latestRgbaBytes;
+    private sbyte[] latestRgbaSBytes;
     private float lastInferenceTime;
     private float lastDebugStreamTime;
     private int debugWidth;
@@ -80,7 +81,17 @@ public class Camera2FrameReceiver : MonoBehaviour
         float now = Time.realtimeSinceStartup;
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-        latestRgbaBytes = plugin.Call<byte[]>("getLatestRgbaFrame");
+        if (!ShouldPullFrame(now))
+            return;
+
+        latestRgbaSBytes = plugin.Call<sbyte[]>("getLatestRgbaFrame");
+        if (latestRgbaSBytes == null || latestRgbaSBytes.Length == 0)
+            return;
+
+        if (latestRgbaBytes == null || latestRgbaBytes.Length != latestRgbaSBytes.Length)
+            latestRgbaBytes = new byte[latestRgbaSBytes.Length];
+
+        Buffer.BlockCopy(latestRgbaSBytes, 0, latestRgbaBytes, 0, latestRgbaSBytes.Length);
         if (latestRgbaBytes == null || latestRgbaBytes.Length == 0)
             return;
 
@@ -96,6 +107,23 @@ public class Camera2FrameReceiver : MonoBehaviour
         TrySendDebugFrame(now);
         TryRunYolo(now);
 #endif
+    }
+
+    private bool ShouldPullFrame(float now)
+    {
+        bool yoloDue = yoloLogger != null
+            && !isProcessing
+            && (now - lastInferenceTime) * 1000f >= inferenceIntervalMs;
+
+        bool debugDue = false;
+        if (enableDebugStream)
+        {
+            int fps = Mathf.Max(1, debugStreamFps);
+            float streamIntervalMs = 1000f / fps;
+            debugDue = (now - lastDebugStreamTime) * 1000f >= streamIntervalMs;
+        }
+
+        return yoloDue || debugDue;
     }
 
     private void TryRunYolo(float now)
