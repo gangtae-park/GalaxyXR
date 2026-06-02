@@ -2530,6 +2530,8 @@ MonoBehaviour:
   pinchAction: {fileID: 187161793506945269, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   pinchValueThreshold: 0.7
   minSampleDistance: 0.01
+  useOpenXRFallbackPinch: 1
+  pinchDebugLogIntervalSeconds: 1
   referenceCamera: {fileID: 0}
 --- !u!114 &690067455
 MonoBehaviour:
@@ -2599,6 +2601,7 @@ MonoBehaviour:
   msgSender: {fileID: 1234129723}
   referenceCamera: {fileID: 1948693200}
   pinchValueThreshold: 0.7
+  useOpenXRFallbackPinch: 1
   maxAnchorMoveDistance: 0.035
   minAnchorHoldSeconds: 0.08
   maxAnchorHoldSeconds: 0.75
@@ -5179,6 +5182,7 @@ MonoBehaviour:
   gazeRotationAction: {fileID: -5930349909990434036, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   gazeTrackingStateAction: {fileID: 2069149553511882089, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   sendHz: 30
+  verboseGazePacketLogging: 0
   blockExternalSearchGestures: 1
   searchGestureName: Search/Find Info
 --- !u!1 &1260218105

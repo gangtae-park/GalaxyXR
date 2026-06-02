@@ -27,6 +27,7 @@ public class MsgSender : MonoBehaviour
 
     [Header("Send Rate")]
     public float sendHz = 30f;
+    public bool verboseGazePacketLogging = false;
 
     [Header("Gesture Routing")]
     public bool blockExternalSearchGestures = true;
@@ -267,6 +268,7 @@ public class MsgSender : MonoBehaviour
 
         byte[] data = Encoding.UTF8.GetBytes(msg);
         client.Send(data, data.Length, serverIP, port);
-        Debug.Log($"[SENDER] Packet sent to {serverIP}:{port} | {msg}");
+        if (verboseGazePacketLogging || !msg.StartsWith("GAZE,", StringComparison.Ordinal))
+            Debug.Log($"[SENDER] Packet sent to {serverIP}:{port} | {msg}");
     }
 }

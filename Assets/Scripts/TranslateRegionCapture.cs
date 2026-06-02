@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 
 /// <summary>
 /// Captures the Translate interaction:
@@ -29,6 +30,7 @@ public class TranslateRegionCapture : MonoBehaviour
 
     [Header("Pinch")]
     [Range(0f, 1f)] public float pinchValueThreshold = 0.7f;
+    public bool useOpenXRFallbackPinch = true;
     [Tooltip("The first pinch must stay mostly still to become a Translate anchor.")]
     public float maxAnchorMoveDistance = 0.035f;
     [Tooltip("Reject accidental taps that are too short to be intentional.")]
@@ -79,19 +81,13 @@ public class TranslateRegionCapture : MonoBehaviour
 
     void Update()
     {
-        if (pinchAction == null || pinchAction.action == null)
-        {
-            CancelSelection("pinch action missing");
-            return;
-        }
-
         if (indexTip == null)
         {
             CancelSelection("index tip missing");
             return;
         }
 
-        bool isPinching = pinchAction.action.ReadValue<float>() >= pinchValueThreshold;
+        bool isPinching = ReadPinchValue() >= pinchValueThreshold;
 
         switch (_state)
         {
@@ -109,6 +105,42 @@ public class TranslateRegionCapture : MonoBehaviour
         }
 
         _wasPinching = isPinching;
+    }
+
+    float ReadPinchValue()
+    {
+        float value = 0f;
+
+        if (pinchAction != null && pinchAction.action != null)
+            value = Mathf.Max(value, pinchAction.action.ReadValue<float>());
+
+        if (!useOpenXRFallbackPinch)
+            return value;
+
+        value = Mathf.Max(value, ReadAxis("<MetaAimHand>{RightHand}/pinchStrengthIndex"));
+        value = Mathf.Max(value, ReadAxis("<MetaAimHand>{LeftHand}/pinchStrengthIndex"));
+        value = Mathf.Max(value, ReadAxis("<HandInteraction>{RightHand}/pinchValue"));
+        value = Mathf.Max(value, ReadAxis("<HandInteraction>{LeftHand}/pinchValue"));
+        value = Mathf.Max(value, ReadAxis("<XRHandDevice>{RightHand}/pinchValue"));
+        value = Mathf.Max(value, ReadAxis("<XRHandDevice>{LeftHand}/pinchValue"));
+        value = Mathf.Max(value, ReadButton("<HandInteraction>{RightHand}/pinchTouched"));
+        value = Mathf.Max(value, ReadButton("<HandInteraction>{LeftHand}/pinchTouched"));
+        value = Mathf.Max(value, ReadButton("<KHRSimpleController>{RightHand}/select"));
+        value = Mathf.Max(value, ReadButton("<KHRSimpleController>{LeftHand}/select"));
+
+        return value;
+    }
+
+    static float ReadAxis(string controlPath)
+    {
+        AxisControl control = InputSystem.FindControl<AxisControl>(controlPath);
+        return control != null ? control.ReadValue() : 0f;
+    }
+
+    static float ReadButton(string controlPath)
+    {
+        ButtonControl control = InputSystem.FindControl<ButtonControl>(controlPath);
+        return control != null && control.isPressed ? 1f : 0f;
     }
 
     void BeginAnchorPinch()

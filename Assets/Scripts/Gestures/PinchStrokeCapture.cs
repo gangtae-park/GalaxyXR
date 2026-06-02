@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 
 /*
 Captures a pinch trajectory as a single Stroke and emits lifecycle events.
@@ -15,6 +16,8 @@ public class PinchStrokeCapture : MonoBehaviour
     public InputActionReference pinchAction;
     [Range(0f, 1f)] public float pinchValueThreshold = 0.7f;
     public float minSampleDistance = 0.01f;
+    public bool useOpenXRFallbackPinch = true;
+    public float pinchDebugLogIntervalSeconds = 1f;
 
     [Header("Camera")]
     public Camera referenceCamera;
@@ -26,6 +29,7 @@ public class PinchStrokeCapture : MonoBehaviour
 
     private bool _wasPinching = false;
     private Stroke _currentStroke;
+    private float _nextPinchDebugLogTime;
 
     void OnEnable()
     {
@@ -44,18 +48,20 @@ public class PinchStrokeCapture : MonoBehaviour
 
     void Update()
     {
-        if (pinchAction == null || pinchAction.action == null)
-        {
-            CancelStroke("Pinch action missing");
-            return;
-        }
         if (indexTip == null)
         {
             CancelStroke("Index tip missing");
             return;
         }
 
-        bool isPinching = pinchAction.action.ReadValue<float>() >= pinchValueThreshold;
+        float pinchValue = ReadPinchValue();
+        bool isPinching = pinchValue >= pinchValueThreshold;
+
+        if (pinchDebugLogIntervalSeconds > 0f && Time.realtimeSinceStartup >= _nextPinchDebugLogTime)
+        {
+            _nextPinchDebugLogTime = Time.realtimeSinceStartup + pinchDebugLogIntervalSeconds;
+            Debug.Log($"[PinchStrokeCapture] pinchValue={pinchValue:F3}, threshold={pinchValueThreshold:F2}, indexTip={(indexTip != null ? indexTip.name : "null")}");
+        }
 
         if (isPinching && !_wasPinching)
         {
@@ -71,6 +77,42 @@ public class PinchStrokeCapture : MonoBehaviour
         }
 
         _wasPinching = isPinching;
+    }
+
+    float ReadPinchValue()
+    {
+        float value = 0f;
+
+        if (pinchAction != null && pinchAction.action != null)
+            value = Mathf.Max(value, pinchAction.action.ReadValue<float>());
+
+        if (!useOpenXRFallbackPinch)
+            return value;
+
+        value = Mathf.Max(value, ReadAxis("<MetaAimHand>{RightHand}/pinchStrengthIndex"));
+        value = Mathf.Max(value, ReadAxis("<MetaAimHand>{LeftHand}/pinchStrengthIndex"));
+        value = Mathf.Max(value, ReadAxis("<HandInteraction>{RightHand}/pinchValue"));
+        value = Mathf.Max(value, ReadAxis("<HandInteraction>{LeftHand}/pinchValue"));
+        value = Mathf.Max(value, ReadAxis("<XRHandDevice>{RightHand}/pinchValue"));
+        value = Mathf.Max(value, ReadAxis("<XRHandDevice>{LeftHand}/pinchValue"));
+        value = Mathf.Max(value, ReadButton("<HandInteraction>{RightHand}/pinchTouched"));
+        value = Mathf.Max(value, ReadButton("<HandInteraction>{LeftHand}/pinchTouched"));
+        value = Mathf.Max(value, ReadButton("<KHRSimpleController>{RightHand}/select"));
+        value = Mathf.Max(value, ReadButton("<KHRSimpleController>{LeftHand}/select"));
+
+        return value;
+    }
+
+    static float ReadAxis(string controlPath)
+    {
+        AxisControl control = InputSystem.FindControl<AxisControl>(controlPath);
+        return control != null ? control.ReadValue() : 0f;
+    }
+
+    static float ReadButton(string controlPath)
+    {
+        ButtonControl control = InputSystem.FindControl<ButtonControl>(controlPath);
+        return control != null && control.isPressed ? 1f : 0f;
     }
 
     void BeginStroke()
