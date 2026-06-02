@@ -21,11 +21,15 @@ public class YoloSegLogger : MonoBehaviour
     public Unity.InferenceEngine.BackendType backendType = Unity.InferenceEngine.BackendType.GPUCompute;
     public string detectionOutputName = "output0";
 
+    public IReadOnlyList<SegResult> LatestResults => latestResults;
+    public event Action<IReadOnlyList<SegResult>> OnResultsUpdated;
+
     private Unity.InferenceEngine.Worker worker;
     private Unity.InferenceEngine.Model runtimeModel;
     private string[] classNames;
     private bool initialized = false;
     private Unity.InferenceEngine.TextureTransform inputTransform;
+    private readonly List<SegResult> latestResults = new List<SegResult>();
 
     private void Start()
     {
@@ -91,6 +95,9 @@ public class YoloSegLogger : MonoBehaviour
             cpuOutput = outputTensor.ReadbackAndClone();
 
             List<SegResult> results = DecodeYoloDetectionOutput(cpuOutput, frame.width, frame.height);
+            latestResults.Clear();
+            latestResults.AddRange(results);
+            OnResultsUpdated?.Invoke(latestResults);
 
             Debug.Log($"[YOLO] Segments detected: {results.Count}");
 

@@ -18,6 +18,8 @@ public class GestureRouter : MonoBehaviour
 
     [Header("Routing")]
     public string pendingReferentName = "Pending";
+    public string[] localOnlyGestureNames = new[] { "Search/Find Info" };
+    public bool sendLocalOnlyGestureEvents = false;
 
     public event Action<string> OnGestureRecognized;
     public event Action OnGestureFailed;
@@ -65,10 +67,19 @@ public class GestureRouter : MonoBehaviour
         if (!string.IsNullOrEmpty(referentName))
         {
             Debug.Log($"[GestureRouter] RECOGNIZED: {referentName}");
-            // Send END with the final name so Python's handler dispatches correctly.
-            SendEvent(referentName, "END");
-            // Then send a RECOGNIZED packet (informational; Python END already triggers VLM).
-            SendRecognized(referentName);
+
+            if (IsLocalOnlyGesture(referentName) && !sendLocalOnlyGestureEvents)
+            {
+                Debug.Log($"[GestureRouter] Local-only gesture recognized: {referentName}. Skipping Python/VLM routing.");
+            }
+            else
+            {
+                // Send END with the final name so Python's handler dispatches correctly.
+                SendEvent(referentName, "END");
+                // Then send a RECOGNIZED packet (informational; Python END already triggers VLM).
+                SendRecognized(referentName);
+            }
+
             try { OnGestureRecognized?.Invoke(referentName); } catch (Exception e) { Debug.LogError(e); }
         }
         else
@@ -106,5 +117,19 @@ public class GestureRouter : MonoBehaviour
             eventType = "RECOGNIZED",
         };
         msgSender.SendCircleGesture(payload);
+    }
+
+    bool IsLocalOnlyGesture(string gestureName)
+    {
+        if (localOnlyGestureNames == null)
+            return false;
+
+        foreach (var localOnlyGestureName in localOnlyGestureNames)
+        {
+            if (string.Equals(localOnlyGestureName, gestureName, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
     }
 }

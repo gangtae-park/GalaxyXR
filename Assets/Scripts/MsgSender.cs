@@ -28,6 +28,10 @@ public class MsgSender : MonoBehaviour
     [Header("Send Rate")]
     public float sendHz = 30f;
 
+    [Header("Gesture Routing")]
+    public bool blockExternalSearchGestures = true;
+    public string searchGestureName = "Search/Find Info";
+
     private UdpClient client;
     private float nextSendTime = 0f;
     private int seq = 0;
@@ -130,6 +134,12 @@ public class MsgSender : MonoBehaviour
             return;
         }
 
+        if (ShouldBlockExternalGesture(payload.gestureName))
+        {
+            Debug.Log($"[SENDER] Blocked external gesture event for local-only gesture: {payload.gestureName}/{payload.eventType}");
+            return;
+        }
+
         string safeGestureName = string.IsNullOrEmpty(payload.gestureName) ? "UnknownGesture" : payload.gestureName.Replace(",", "_");
         string safeEventType = string.IsNullOrEmpty(payload.eventType) ? "UNKNOWN" : payload.eventType.Replace(",", "_");
 
@@ -149,6 +159,12 @@ public class MsgSender : MonoBehaviour
 
     public void SendGesturePacket(string gestureName)
     {
+        if (ShouldBlockExternalGesture(gestureName))
+        {
+            Debug.Log($"[SENDER] Blocked external gesture packet for local-only gesture: {gestureName}");
+            return;
+        }
+
         string safeGestureName = string.IsNullOrEmpty(gestureName) ? "UnknownGesture" : gestureName.Replace(",", "_");
 
         string msg = string.Join(",",
@@ -162,6 +178,12 @@ public class MsgSender : MonoBehaviour
 
         seq++;
         SendPacket(msg);
+    }
+
+    bool ShouldBlockExternalGesture(string gestureName)
+    {
+        return blockExternalSearchGestures
+            && string.Equals(gestureName, searchGestureName, StringComparison.Ordinal);
     }
 
     /// <summary>

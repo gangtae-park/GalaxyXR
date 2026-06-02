@@ -2307,6 +2307,96 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 680485292}
   m_CullTransparentMesh: 0
+--- !u!1 &676200001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 676200002}
+  - component: {fileID: 676200003}
+  - component: {fileID: 676200004}
+  - component: {fileID: 676200005}
+  m_Layer: 0
+  m_Name: Camera2YoloSystem
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &676200002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 676200001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &676200003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 676200001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65c4b41acc36a4257b14868eb93675e8, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::YoloSegLogger
+  modelAsset: {fileID: 5022602860645237092, guid: bb7fe89854b2645bf95205dd8a07c550, type: 3}
+  classNamesAsset: {fileID: 4900000, guid: e1fdb44942bf3461caed5378e2779ee6, type: 3}
+  inputSize: 640
+  confThreshold: 0.35
+  iouThreshold: 0.45
+  maskCoeffCount: 32
+  maxDetections: 20
+  backendType: 256
+  detectionOutputName: output0
+--- !u!114 &676200004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 676200001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc9c2529ba5cf42f3bd5deb5cdb3e39c, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::Camera2FrameReceiver
+  width: 1280
+  height: 720
+  inferenceIntervalMs: 1000
+  enableDebugStream: 1
+  debugStreamIp: 192.168.0.4
+  debugStreamPort: 5005
+  debugStreamFps: 60
+  debugMaxWidth: 480
+  debugMaxHeight: 270
+  jpegQuality: 50
+  yoloLogger: {fileID: 676200003}
+--- !u!114 &676200005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 676200001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c52aa651b3ad345d2a434d3d0a40660d, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::CameraPermissionRequester
 --- !u!1 &690067448
 GameObject:
   m_ObjectHideFlags: 0
@@ -2384,6 +2474,9 @@ MonoBehaviour:
   msgSender: {fileID: 1234129723}
   jackknifeRecognizer: {fileID: 690067456}
   pendingReferentName: Pending
+  localOnlyGestureNames:
+  - Search/Find Info
+  sendLocalOnlyGestureEvents: 0
 --- !u!114 &690067452
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5086,6 +5179,8 @@ MonoBehaviour:
   gazeRotationAction: {fileID: -5930349909990434036, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   gazeTrackingStateAction: {fileID: 2069149553511882089, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   sendHz: 30
+  blockExternalSearchGestures: 1
+  searchGestureName: Search/Find Info
 --- !u!1 &1260218105
 GameObject:
   m_ObjectHideFlags: 0
@@ -7353,7 +7448,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1980331413}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 993856f163c7e47ca8431cb8bb85ee4a, type: 3}
   m_Name: 
