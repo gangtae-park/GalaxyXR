@@ -3,16 +3,28 @@ using System.Net;
 using System.Net.Sockets;
 using UnityEngine;
 
+/// <summary>
+/// Supplies the current camera frame to YOLO.
+/// Galaxy XR builds use the on-device Camera2 plugin; Editor Play Mode uses
+/// a PC webcam while keeping the same gesture-to-inference pipeline.
+/// </summary>
 public class Camera2FrameReceiver : MonoBehaviour
 {
-    [Header("Camera2 Capture")]
+    [Header("Camera Capture")]
     public int width = 1280;
     public int height = 720;
 
     [Header("YOLO Processing")]
     public int inferenceIntervalMs = 1000;
+    [Tooltip("When disabled, YOLO runs only after a recognized Search gesture.")]
+    public bool runInferenceContinuously = false;
 
-    [Header("Debug Stream to Mac")]
+    [Header("Editor Play Mode")]
+    [Tooltip("Use a PC webcam as the frame source in Editor Play Mode.")]
+    public bool useEditorWebcam = true;
+    public int editorWebcamIndex = 0;
+
+    [Header("Debug Stream")]
     public bool enableDebugStream = false;
     public string debugStreamIp = "192.168.0.2";
     public int debugStreamPort = 5005;
@@ -24,131 +36,231 @@ public class Camera2FrameReceiver : MonoBehaviour
     public YoloSegLogger yoloLogger;
     public int FrameWidth => latestTexture != null ? latestTexture.width : width;
     public int FrameHeight => latestTexture != null ? latestTexture.height : height;
+    public bool HasFrame { get; private set; }
+    public string ActiveSource { get; private set; } = "None";
+    public event Action<string> OnCameraStatusChanged;
 
     private AndroidJavaObject plugin;
     private Texture2D latestTexture;
     private Texture2D debugTexture;
+    private WebCamTexture editorWebcam;
     private byte[] latestRgbaBytes;
     private sbyte[] latestRgbaSBytes;
     private float lastInferenceTime;
     private float lastDebugStreamTime;
     private int debugWidth;
     private int debugHeight;
-
     private UdpClient udpClient;
     private IPEndPoint debugStreamEndPoint;
-
-    private bool isProcessing = false;
+    private bool isProcessing;
 
     private void Start()
     {
         latestTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
-
-        if (enableDebugStream)
-        {
-            CalculateDebugStreamSize();
-            debugTexture = new Texture2D(debugWidth, debugHeight, TextureFormat.RGB24, false);
-            udpClient = new UdpClient();
-            debugStreamEndPoint = new IPEndPoint(IPAddress.Parse(debugStreamIp), debugStreamPort);
-            Debug.Log($"[DebugStream] UDP stream enabled: {debugStreamIp}:{debugStreamPort}, fps={debugStreamFps}, size={debugWidth}x{debugHeight}, jpegQuality={jpegQuality}");
-        }
+        InitializeDebugStream();
 
 #if UNITY_ANDROID && !UNITY_EDITOR
+        StartAndroidCamera();
+#elif UNITY_EDITOR
+        StartEditorWebcam();
+#else
+        ReportStatus("No camera provider is available on this platform");
+#endif
+    }
+
+    private void Update()
+    {
+#if UNITY_EDITOR
+        UpdateEditorWebcam();
+#endif
+    }
+
+    /// <summary>Called by the Android Camera2 plugin through UnitySendMessage.</summary>
+    public void OnFrameAvailable(string message)
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        PullAndroidFrame();
+#endif
+    }
+
+    /// <summary>
+    /// Runs YOLO against the latest frame. Search gestures use this entry point
+    /// on both Android builds and Editor Play Mode.
+    /// </summary>
+    public void RequestInference(Action<bool> onComplete)
+    {
+        if (!HasFrame || latestTexture == null)
+        {
+            ReportStatus($"No frame available from {ActiveSource}");
+            onComplete?.Invoke(false);
+            return;
+        }
+
+        RunYolo(Time.realtimeSinceStartup, onComplete, true);
+    }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+    private void StartAndroidCamera()
+    {
+        ActiveSource = "Galaxy XR Camera2";
         using var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-        var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+        AndroidJavaObject activity =
+            unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
 
         plugin = new AndroidJavaObject(
             "com.example.camera2plugin.Camera2StreamPlugin",
             activity,
             gameObject.name,
             width,
-            height
-        );
+            height);
 
         plugin.Call("startCamera");
-#endif
+        ReportStatus($"Started {ActiveSource}");
     }
 
-    // Android plugin에서 UnitySendMessage로 호출
-    public void OnFrameAvailable(string message)
+    private void PullAndroidFrame()
     {
-        // message 예: "frame_ready"
-        // 실제 frame byte[] 전달은 UnitySendMessage로는 비효율적이라,
-        // Unity가 plugin.getLatestRgbaFrame()을 pull 하는 구조를 사용
-        TryRunInference();
-    }
-
-    private void TryRunInference()
-    {
-        float now = Time.realtimeSinceStartup;
-
-#if UNITY_ANDROID && !UNITY_EDITOR
-        if (!ShouldPullFrame(now))
-            return;
-
-        latestRgbaSBytes = plugin.Call<sbyte[]>("getLatestRgbaFrame");
+        latestRgbaSBytes = plugin?.Call<sbyte[]>("getLatestRgbaFrame");
         if (latestRgbaSBytes == null || latestRgbaSBytes.Length == 0)
             return;
 
         if (latestRgbaBytes == null || latestRgbaBytes.Length != latestRgbaSBytes.Length)
             latestRgbaBytes = new byte[latestRgbaSBytes.Length];
 
-        Buffer.BlockCopy(latestRgbaSBytes, 0, latestRgbaBytes, 0, latestRgbaSBytes.Length);
-        if (latestRgbaBytes == null || latestRgbaBytes.Length == 0)
-            return;
+        Buffer.BlockCopy(
+            latestRgbaSBytes,
+            0,
+            latestRgbaBytes,
+            0,
+            latestRgbaSBytes.Length);
 
         if (latestRgbaBytes.Length != width * height * 4)
         {
-            Debug.LogWarning($"[Camera2] Invalid frame size: {latestRgbaBytes.Length}, expected={width * height * 4}");
+            Debug.LogWarning(
+                $"[CameraFrame] Invalid Camera2 frame size: {latestRgbaBytes.Length}, " +
+                $"expected={width * height * 4}");
             return;
         }
 
         latestTexture.LoadRawTextureData(latestRgbaBytes);
         latestTexture.Apply(false);
+        HasFrame = true;
 
+        float now = Time.realtimeSinceStartup;
         TrySendDebugFrame(now);
-        TryRunYolo(now);
-#endif
+        if (runInferenceContinuously)
+            RunYolo(now, null);
     }
+#endif
 
-    private bool ShouldPullFrame(float now)
+#if UNITY_EDITOR
+    private void StartEditorWebcam()
     {
-        bool yoloDue = yoloLogger != null
-            && !isProcessing
-            && (now - lastInferenceTime) * 1000f >= inferenceIntervalMs;
-
-        bool debugDue = false;
-        if (enableDebugStream)
+        if (!useEditorWebcam)
         {
-            int fps = Mathf.Max(1, debugStreamFps);
-            float streamIntervalMs = 1000f / fps;
-            debugDue = (now - lastDebugStreamTime) * 1000f >= streamIntervalMs;
+            ActiveSource = "Editor webcam disabled";
+            ReportStatus(ActiveSource);
+            return;
         }
 
-        return yoloDue || debugDue;
+        WebCamDevice[] devices = WebCamTexture.devices;
+        if (devices == null || devices.Length == 0)
+        {
+            ActiveSource = "No PC webcam";
+            ReportStatus(ActiveSource);
+            return;
+        }
+
+        int index = Mathf.Clamp(editorWebcamIndex, 0, devices.Length - 1);
+        ActiveSource = $"PC webcam: {devices[index].name}";
+        editorWebcam = new WebCamTexture(devices[index].name, width, height, 30);
+        editorWebcam.Play();
+        ReportStatus($"Starting {ActiveSource}");
     }
 
-    private void TryRunYolo(float now)
+    private void UpdateEditorWebcam()
+    {
+        if (editorWebcam == null ||
+            !editorWebcam.isPlaying ||
+            !editorWebcam.didUpdateThisFrame)
+        {
+            return;
+        }
+
+        int frameWidth = editorWebcam.width;
+        int frameHeight = editorWebcam.height;
+        if (frameWidth <= 16 || frameHeight <= 16)
+            return;
+
+        if (latestTexture == null ||
+            latestTexture.width != frameWidth ||
+            latestTexture.height != frameHeight)
+        {
+            if (latestTexture != null)
+                Destroy(latestTexture);
+
+            latestTexture =
+                new Texture2D(frameWidth, frameHeight, TextureFormat.RGBA32, false);
+        }
+
+        latestTexture.SetPixels32(editorWebcam.GetPixels32());
+        latestTexture.Apply(false);
+        HasFrame = true;
+
+        float now = Time.realtimeSinceStartup;
+        TrySendDebugFrame(now);
+        if (runInferenceContinuously)
+            RunYolo(now, null);
+    }
+#endif
+
+    private void RunYolo(
+        float now,
+        Action<bool> onComplete,
+        bool ignoreInterval = false)
     {
         if (isProcessing)
+        {
+            onComplete?.Invoke(false);
             return;
+        }
 
-        if ((now - lastInferenceTime) * 1000f < inferenceIntervalMs)
+        if (!ignoreInterval &&
+            (now - lastInferenceTime) * 1000f < inferenceIntervalMs)
+        {
+            onComplete?.Invoke(false);
             return;
-
-        lastInferenceTime = now;
+        }
 
         if (yoloLogger == null)
         {
-            Debug.LogWarning("[Camera2] YoloSegLogger is not assigned.");
+            ReportStatus("YoloSegLogger is not assigned");
+            onComplete?.Invoke(false);
             return;
         }
 
+        lastInferenceTime = now;
         isProcessing = true;
+        ReportStatus($"Running YOLO from {ActiveSource}");
+
         yoloLogger.RunAndLog(latestTexture, () =>
         {
             isProcessing = false;
+            onComplete?.Invoke(true);
         });
+    }
+
+    private void InitializeDebugStream()
+    {
+        if (!enableDebugStream)
+            return;
+
+        CalculateDebugStreamSize();
+        debugTexture =
+            new Texture2D(debugWidth, debugHeight, TextureFormat.RGB24, false);
+        udpClient = new UdpClient();
+        debugStreamEndPoint =
+            new IPEndPoint(IPAddress.Parse(debugStreamIp), debugStreamPort);
     }
 
     private void CalculateDebugStreamSize()
@@ -156,8 +268,7 @@ public class Camera2FrameReceiver : MonoBehaviour
         float scale = Mathf.Min(
             debugMaxWidth / (float)width,
             debugMaxHeight / (float)height,
-            1f
-        );
+            1f);
 
         debugWidth = Mathf.Max(1, Mathf.RoundToInt(width * scale));
         debugHeight = Mathf.Max(1, Mathf.RoundToInt(height * scale));
@@ -165,12 +276,17 @@ public class Camera2FrameReceiver : MonoBehaviour
 
     private void TrySendDebugFrame(float now)
     {
-        if (!enableDebugStream || udpClient == null || debugStreamEndPoint == null || debugTexture == null)
+        if (!enableDebugStream ||
+            udpClient == null ||
+            debugStreamEndPoint == null ||
+            debugTexture == null ||
+            latestTexture == null)
+        {
             return;
+        }
 
-        int fps = Mathf.Max(1, debugStreamFps);
-        float streamIntervalMs = 1000f / fps;
-        if ((now - lastDebugStreamTime) * 1000f < streamIntervalMs)
+        float intervalMs = 1000f / Mathf.Max(1, debugStreamFps);
+        if ((now - lastDebugStreamTime) * 1000f < intervalMs)
             return;
 
         lastDebugStreamTime = now;
@@ -191,16 +307,25 @@ public class Camera2FrameReceiver : MonoBehaviour
     {
         Color32[] src = latestTexture.GetPixels32();
         Color32[] dst = new Color32[debugWidth * debugHeight];
+        int sourceWidth = latestTexture.width;
+        int sourceHeight = latestTexture.height;
 
         for (int y = 0; y < debugHeight; y++)
         {
-            int srcY = Mathf.Clamp(Mathf.FloorToInt((y + 0.5f) * height / debugHeight), 0, height - 1);
-            int flippedSrcY = height - 1 - srcY;
+            int srcY = Mathf.Clamp(
+                Mathf.FloorToInt((y + 0.5f) * sourceHeight / debugHeight),
+                0,
+                sourceHeight - 1);
+            int flippedSrcY = sourceHeight - 1 - srcY;
 
             for (int x = 0; x < debugWidth; x++)
             {
-                int srcX = Mathf.Clamp(Mathf.FloorToInt((x + 0.5f) * width / debugWidth), 0, width - 1);
-                dst[y * debugWidth + x] = src[flippedSrcY * width + srcX];
+                int srcX = Mathf.Clamp(
+                    Mathf.FloorToInt((x + 0.5f) * sourceWidth / debugWidth),
+                    0,
+                    sourceWidth - 1);
+                dst[y * debugWidth + x] =
+                    src[flippedSrcY * sourceWidth + srcX];
             }
         }
 
@@ -208,17 +333,36 @@ public class Camera2FrameReceiver : MonoBehaviour
         debugTexture.Apply(false);
     }
 
+    private void ReportStatus(string status)
+    {
+        Debug.Log($"[CameraFrame] {status}");
+        try { OnCameraStatusChanged?.Invoke(status); }
+        catch (Exception e)
+        {
+            Debug.LogError($"[CameraFrame] Status subscriber threw: {e}");
+        }
+    }
+
     private void OnDestroy()
     {
-        udpClient?.Close();
-        udpClient = null;
-        if (debugTexture != null)
+#if UNITY_EDITOR
+        if (editorWebcam != null)
         {
-            Destroy(debugTexture);
-            debugTexture = null;
+            editorWebcam.Stop();
+            editorWebcam = null;
         }
+#endif
+
 #if UNITY_ANDROID && !UNITY_EDITOR
         plugin?.Call("stopCamera");
 #endif
+
+        udpClient?.Close();
+        udpClient = null;
+
+        if (latestTexture != null)
+            Destroy(latestTexture);
+        if (debugTexture != null)
+            Destroy(debugTexture);
     }
 }

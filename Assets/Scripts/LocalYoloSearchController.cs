@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -31,6 +32,8 @@ public class LocalYoloSearchController : MonoBehaviour
     public bool replacePreviousCard = true;
     public bool verboseLogging = true;
 
+    public event Action<string> OnSearchStatusChanged;
+
     private VlmInfoCard currentCard;
 
     private void OnEnable()
@@ -52,17 +55,52 @@ public class LocalYoloSearchController : MonoBehaviour
 
         VlmInfoCard card = SpawnCard(pose);
         if (card == null)
+        {
+            ReportStatus("Search failed: result card unavailable");
+            return;
+        }
+
+        ReportStatus("Search gesture received - capturing current frame");
+
+        if (frameReceiver == null)
+        {
+            card.SetError("Camera unavailable", "Camera frame receiver is not assigned.");
+            ReportStatus("Search failed: camera receiver missing");
+            return;
+        }
+
+        frameReceiver.RequestInference(success =>
+        {
+            if (success)
+            {
+                ResolveLatestResult(pose, card);
+                return;
+            }
+
+            if (card != null)
+                card.SetError("Camera frame unavailable", "Could not run YOLO on the current frame.");
+            ReportStatus("Search failed: current camera frame unavailable");
+        });
+    }
+
+    private void ResolveLatestResult(
+        GestureAnchorTracker.AnchorPose pose,
+        VlmInfoCard card)
+    {
+        if (card == null)
             return;
 
         if (yoloLogger == null)
         {
             card.SetError("Local search unavailable", "YoloSegLogger is not assigned.");
+            ReportStatus("Search failed: YoloSegLogger missing");
             return;
         }
 
         if (yoloLogger.LastResultsTime < 0f)
         {
             card.SetError("No camera result", "YOLO has not analyzed a camera frame yet.");
+            ReportStatus("Search failed: no YOLO camera result");
             return;
         }
 
@@ -73,6 +111,7 @@ public class LocalYoloSearchController : MonoBehaviour
                 "Camera result is stale",
                 $"The latest YOLO result is {resultAge:F1}s old. Wait for a new frame and try again."
             );
+            ReportStatus($"Search failed: YOLO result is {resultAge:F1}s old");
             return;
         }
 
@@ -80,6 +119,7 @@ public class LocalYoloSearchController : MonoBehaviour
         if (results == null || results.Count == 0)
         {
             card.SetError("Nothing detected", "YOLO found no object in the latest camera frame.");
+            ReportStatus("Search complete: no objects detected");
             return;
         }
 
@@ -93,6 +133,7 @@ public class LocalYoloSearchController : MonoBehaviour
                 "No object at gaze",
                 "No YOLO detection was close enough to the point you were looking at."
             );
+            ReportStatus("Search failed: no object near gaze");
             return;
         }
 
@@ -105,6 +146,7 @@ public class LocalYoloSearchController : MonoBehaviour
             $"Box: ({selected.x:F0}, {selected.y:F0}) {selected.w:F0} x {selected.h:F0}";
 
         card.SetContentSearch(objectName, details, null, null);
+        ReportStatus($"Search success: {objectName} ({selected.confidence:P0})");
 
         if (verboseLogging)
         {
@@ -113,6 +155,13 @@ public class LocalYoloSearchController : MonoBehaviour
                 $"at gaze pixel ({gazePoint.x:F0}, {gazePoint.y:F0})."
             );
         }
+    }
+
+    private void ReportStatus(string message)
+    {
+        Debug.Log($"[LocalYoloSearch] {message}");
+        try { OnSearchStatusChanged?.Invoke(message); }
+        catch (Exception e) { Debug.LogError($"[LocalYoloSearch] Status subscriber threw: {e}"); }
     }
 
     private Vector2 GetGazeImagePoint(GestureAnchorTracker.AnchorPose pose, Camera cam)

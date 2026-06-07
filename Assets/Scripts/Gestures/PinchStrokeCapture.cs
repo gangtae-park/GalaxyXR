@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Controls;
+using UnityEngine.XR.Hands;
 
 /*
 Captures a pinch trajectory as a single Stroke and emits lifecycle events.
@@ -17,6 +18,8 @@ public class PinchStrokeCapture : MonoBehaviour
     [Range(0f, 1f)] public float pinchValueThreshold = 0.7f;
     public float minSampleDistance = 0.01f;
     public bool useOpenXRFallbackPinch = true;
+    [Tooltip("Ignore palm-facing system navigation and Circle to Search pinches.")]
+    public bool ignoreSystemGestures = true;
     public float pinchDebugLogIntervalSeconds = 1f;
 
     [Header("Camera")]
@@ -31,6 +34,7 @@ public class PinchStrokeCapture : MonoBehaviour
     private Stroke _currentStroke;
     private float _nextPinchDebugLogTime;
     private bool _loggedInputDetails;
+    private bool _loggedSystemGesture;
 
     void OnEnable()
     {
@@ -56,6 +60,20 @@ public class PinchStrokeCapture : MonoBehaviour
             return;
         }
 
+        if (ignoreSystemGestures && IsSystemGestureActive())
+        {
+            CancelStroke("Android XR system gesture active");
+            if (!_loggedSystemGesture)
+            {
+                Debug.LogWarning(
+                    "[PinchStrokeCapture] Ignoring system pinch. Keep the palm facing " +
+                    "away from the headset when drawing the app's Search circle.");
+                _loggedSystemGesture = true;
+            }
+            return;
+        }
+
+        _loggedSystemGesture = false;
         float pinchValue = ReadPinchValue();
         bool isPinching = pinchValue >= pinchValueThreshold;
 
@@ -116,6 +134,22 @@ public class PinchStrokeCapture : MonoBehaviour
     {
         ButtonControl control = InputSystem.FindControl(controlPath) as ButtonControl;
         return control != null && control.isPressed ? 1f : 0f;
+    }
+
+    static bool IsSystemGestureActive()
+    {
+        return HasSystemGestureFlag("<MetaAimHand>{RightHand}/aimFlags") ||
+               HasSystemGestureFlag("<MetaAimHand>{LeftHand}/aimFlags");
+    }
+
+    static bool HasSystemGestureFlag(string controlPath)
+    {
+        IntegerControl control = InputSystem.FindControl(controlPath) as IntegerControl;
+        if (control == null)
+            return false;
+
+        MetaAimFlags flags = (MetaAimFlags)(ulong)control.ReadValue();
+        return (flags & (MetaAimFlags.SystemGesture | MetaAimFlags.MenuPressed)) != 0;
     }
 
     void LogInputDetails()
