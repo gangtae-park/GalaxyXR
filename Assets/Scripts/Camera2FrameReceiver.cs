@@ -22,6 +22,8 @@ public class Camera2FrameReceiver : MonoBehaviour
     [Range(1, 100)] public int jpegQuality = 50;
 
     public YoloSegLogger yoloLogger;
+    public int FrameWidth => latestTexture != null ? latestTexture.width : width;
+    public int FrameHeight => latestTexture != null ? latestTexture.height : height;
 
     private AndroidJavaObject plugin;
     private Texture2D latestTexture;

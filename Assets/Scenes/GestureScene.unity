@@ -2436,7 +2436,7 @@ MonoBehaviour:
   handAnchor: {fileID: 5534409079552104246}
   indexTip: {fileID: 443043344}
   msgSender: {fileID: 1234129723}
-  pinchAction: {fileID: 187161793506945269, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  pinchAction: {fileID: -1758520528963094988, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   pinchValueThreshold: 0.7
   minSampleDistance: 0.01
   minPointCount: 12
@@ -2473,10 +2473,14 @@ MonoBehaviour:
   strokeCapture: {fileID: 690067454}
   msgSender: {fileID: 1234129723}
   jackknifeRecognizer: {fileID: 690067456}
+  fallbackClassifiers:
+  - {fileID: 690067453}
+  - {fileID: 690067452}
   pendingReferentName: Pending
   localOnlyGestureNames:
   - Search/Find Info
   sendLocalOnlyGestureEvents: 0
+  useFallbackClassifiersWhenJackknifeRejects: 1
 --- !u!114 &690067452
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2484,16 +2488,16 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 690067448}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 067112ac7d7cf4bbf84e7f5497d62ac3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::QuestionMarkClassifier
   gestureName: Ask
   minPointCount: 12
-  maxMatchDistance: 0.2
+  maxMatchDistance: 4
   useNegativeTemplates: 1
-  requiredMargin: 0.05
+  requiredMargin: 0.5
   templateSamples: []
   decoyTemplates: []
 --- !u!114 &690067453
@@ -2503,7 +2507,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 690067448}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bb00668c797f24f6a8b06dfc9c7569e2, type: 3}
   m_Name: 
@@ -2527,7 +2531,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PinchStrokeCapture
   indexTip: {fileID: 443043344}
-  pinchAction: {fileID: 187161793506945269, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  pinchAction: {fileID: -1758520528963094988, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   pinchValueThreshold: 0.7
   minSampleDistance: 0.01
   useOpenXRFallbackPinch: 1
@@ -2597,7 +2601,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TranslateRegionCapture
   indexTip: {fileID: 443043344}
-  pinchAction: {fileID: 187161793506945269, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  pinchAction: {fileID: -1758520528963094988, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   msgSender: {fileID: 1234129723}
   referenceCamera: {fileID: 1948693200}
   pinchValueThreshold: 0.7
@@ -7423,6 +7427,7 @@ GameObject:
   - component: {fileID: 1980331416}
   - component: {fileID: 1980331415}
   - component: {fileID: 1980331418}
+  - component: {fileID: 1980331419}
   m_Layer: 0
   m_Name: VlmManager
   m_TagString: Untagged
@@ -7485,7 +7490,7 @@ MonoBehaviour:
   gestureRecognizer: {fileID: 0}
   eyeGazeReader: {fileID: 1234129721}
   referenceCamera: {fileID: 1948693200}
-  pinchAction: {fileID: 187161793506945269, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  pinchAction: {fileID: -1758520528963094988, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   pinchValueThreshold: 0.7
   defaultDepth: 1
   raycastMask:
@@ -7524,6 +7529,33 @@ MonoBehaviour:
   cardPrefab: {fileID: 2818028396226705512, guid: 9ae11841bc0334cc69c8e2a3dbe61f6d, type: 3}
   referenceCamera: {fileID: 1948693200}
   gestureNameFilter: Ask
+  offsetRight: 0.18
+  offsetUp: 0.12
+  pullToward: 0.05
+  minCameraDistance: 0.4
+  replacePreviousCard: 1
+  verboseLogging: 1
+--- !u!114 &1980331419
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1980331413}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f3c9a1d47c8b4a14b5c67b74665ebd92, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::LocalYoloSearchController
+  anchorTracker: {fileID: 1980331416}
+  yoloLogger: {fileID: 676200003}
+  frameReceiver: {fileID: 676200004}
+  cardPrefab: {fileID: 2818028396226705512, guid: 48871991c54c847bcb79c10583059d42, type: 3}
+  referenceCamera: {fileID: 1948693200}
+  gestureNameFilter: Search/Find Info
+  flipImageY: 1
+  maxCenterDistance: 0.35
+  maxResultAgeSeconds: 2.5
   offsetRight: 0.18
   offsetUp: 0.12
   pullToward: 0.05

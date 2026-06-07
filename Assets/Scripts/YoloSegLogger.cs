@@ -22,6 +22,7 @@ public class YoloSegLogger : MonoBehaviour
     public string detectionOutputName = "output0";
 
     public IReadOnlyList<SegResult> LatestResults => latestResults;
+    public float LastResultsTime { get; private set; } = -1f;
     public event Action<IReadOnlyList<SegResult>> OnResultsUpdated;
 
     private Unity.InferenceEngine.Worker worker;
@@ -97,6 +98,7 @@ public class YoloSegLogger : MonoBehaviour
             List<SegResult> results = DecodeYoloDetectionOutput(cpuOutput, frame.width, frame.height);
             latestResults.Clear();
             latestResults.AddRange(results);
+            LastResultsTime = Time.realtimeSinceStartup;
             OnResultsUpdated?.Invoke(latestResults);
 
             Debug.Log($"[YOLO] Segments detected: {results.Count}");

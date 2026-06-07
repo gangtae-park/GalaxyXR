@@ -23,6 +23,7 @@ public class GestureAnchorTracker : MonoBehaviour
         public Vector3 cameraRight;
         public Vector3 cameraUp;
         public Vector3 cameraForward;
+        public Vector3 gazeDirection;
         public bool gazeWasTracked;
         public float captureTime;
     }
@@ -152,6 +153,7 @@ public class GestureAnchorTracker : MonoBehaviour
             cameraRight = cam.transform.right,
             cameraUp = cam.transform.up,
             cameraForward = cam.transform.forward,
+            gazeDirection = dir,
             gazeWasTracked = gazeTracked,
             captureTime = Time.time,
         };

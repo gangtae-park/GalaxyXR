@@ -15,11 +15,14 @@ public class GestureRouter : MonoBehaviour
     public PinchStrokeCapture strokeCapture;
     public MsgSender msgSender;
     public JackknifeGestureRecognizer jackknifeRecognizer;
+    [Tooltip("Used when Jackknife has no saved templates or rejects the stroke.")]
+    public GestureClassifierComponent[] fallbackClassifiers;
 
     [Header("Routing")]
     public string pendingReferentName = "Pending";
     public string[] localOnlyGestureNames = new[] { "Search/Find Info" };
     public bool sendLocalOnlyGestureEvents = false;
+    public bool useFallbackClassifiersWhenJackknifeRejects = true;
 
     public event Action<string> OnGestureRecognized;
     public event Action OnGestureFailed;
@@ -53,15 +56,15 @@ public class GestureRouter : MonoBehaviour
     {
         string referentName = null;
 
-        if (jackknifeRecognizer != null)
+        if (jackknifeRecognizer != null && jackknifeRecognizer.IsReady)
         {
             try { referentName = jackknifeRecognizer.Recognize(stroke); }
             catch (Exception e) { Debug.LogError($"[GestureRouter] Jackknife threw: {e}"); }
         }
-        else
+
+        if (string.IsNullOrEmpty(referentName) && useFallbackClassifiersWhenJackknifeRejects)
         {
-            Debug.LogError($"[GestureRouter] Can't find Jackknife recognizer");
-            return;
+            referentName = RecognizeWithFallbacks(stroke);
         }
 
         if (!string.IsNullOrEmpty(referentName))
@@ -89,6 +92,42 @@ public class GestureRouter : MonoBehaviour
             SendEvent(pendingReferentName, "FAIL");
             try { OnGestureFailed?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
         }
+    }
+
+    string RecognizeWithFallbacks(Stroke stroke)
+    {
+        if (fallbackClassifiers == null || fallbackClassifiers.Length == 0)
+        {
+            if (jackknifeRecognizer == null || !jackknifeRecognizer.IsReady)
+                Debug.LogWarning("[GestureRouter] No trained Jackknife model or fallback classifiers are available.");
+            return null;
+        }
+
+        string bestName = null;
+        float bestConfidence = float.MinValue;
+
+        foreach (GestureClassifierComponent classifier in fallbackClassifiers)
+        {
+            if (classifier == null) continue;
+
+            try
+            {
+                if (classifier.TryClassify(stroke, out float confidence) && confidence > bestConfidence)
+                {
+                    bestName = classifier.GestureName;
+                    bestConfidence = confidence;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[GestureRouter] Fallback classifier {classifier.GetType().Name} threw: {e}");
+            }
+        }
+
+        if (!string.IsNullOrEmpty(bestName))
+            Debug.Log($"[GestureRouter] Fallback recognized '{bestName}' (confidence={bestConfidence:F2})");
+
+        return bestName;
     }
 
     void HandleCancelled()

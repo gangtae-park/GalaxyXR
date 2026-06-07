@@ -30,10 +30,12 @@ public class PinchStrokeCapture : MonoBehaviour
     private bool _wasPinching = false;
     private Stroke _currentStroke;
     private float _nextPinchDebugLogTime;
+    private bool _loggedInputDetails;
 
     void OnEnable()
     {
         pinchAction?.action.Enable();
+        LogInputDetails();
     }
 
     void OnDisable()
@@ -65,6 +67,7 @@ public class PinchStrokeCapture : MonoBehaviour
 
         if (isPinching && !_wasPinching)
         {
+            Debug.Log($"[PinchStrokeCapture] Pinch threshold crossed ({pinchValue:F3} >= {pinchValueThreshold:F3})");
             BeginStroke();
         }
         else if (isPinching && _wasPinching)
@@ -105,14 +108,27 @@ public class PinchStrokeCapture : MonoBehaviour
 
     static float ReadAxis(string controlPath)
     {
-        AxisControl control = InputSystem.FindControl<AxisControl>(controlPath);
+        AxisControl control = InputSystem.FindControl(controlPath) as AxisControl;
         return control != null ? control.ReadValue() : 0f;
     }
 
     static float ReadButton(string controlPath)
     {
-        ButtonControl control = InputSystem.FindControl<ButtonControl>(controlPath);
+        ButtonControl control = InputSystem.FindControl(controlPath) as ButtonControl;
         return control != null && control.isPressed ? 1f : 0f;
+    }
+
+    void LogInputDetails()
+    {
+        if (_loggedInputDetails || pinchAction == null || pinchAction.action == null)
+            return;
+
+        InputAction action = pinchAction.action;
+        Debug.Log(
+            $"[PinchStrokeCapture] Input ready: {action.actionMap?.name}/{action.name}, " +
+            $"type={action.type}, expected={action.expectedControlType}, bindings={action.bindings.Count}"
+        );
+        _loggedInputDetails = true;
     }
 
     void BeginStroke()

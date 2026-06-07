@@ -133,13 +133,13 @@ public class TranslateRegionCapture : MonoBehaviour
 
     static float ReadAxis(string controlPath)
     {
-        AxisControl control = InputSystem.FindControl<AxisControl>(controlPath);
+        AxisControl control = InputSystem.FindControl(controlPath) as AxisControl;
         return control != null ? control.ReadValue() : 0f;
     }
 
     static float ReadButton(string controlPath)
     {
-        ButtonControl control = InputSystem.FindControl<ButtonControl>(controlPath);
+        ButtonControl control = InputSystem.FindControl(controlPath) as ButtonControl;
         return control != null && control.isPressed ? 1f : 0f;
     }
 
