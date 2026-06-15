@@ -285,6 +285,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9085046f02f69544eb97fd06b6048fe2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!4 &86614895 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 233998606212234918, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &89318626
 GameObject:
   m_ObjectHideFlags: 0
@@ -2008,6 +2013,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 6957000769822834732, guid: d81193b4b57486b46b4762e8b26d2de8, type: 3}
   m_PrefabInstance: {fileID: 547215372}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &561393694 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1757563282518596837, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &564915747
 GameObject:
   m_ObjectHideFlags: 0
@@ -2323,6 +2333,8 @@ GameObject:
   - component: {fileID: 690067451}
   - component: {fileID: 690067455}
   - component: {fileID: 690067456}
+  - component: {fileID: 690067457}
+  - component: {fileID: 690067458}
   m_Layer: 0
   m_Name: GestureManager
   m_TagString: Untagged
@@ -2488,6 +2500,67 @@ MonoBehaviour:
   loadedTemplateCount: 0
   knownGestures: []
   ready: 0
+--- !u!114 &690067457
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 690067448}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 771357dc97b30484e8e55724fee6001d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PinchValueLogger
+  pinchAction: {fileID: -1758520528963094988, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  thumbTip: {fileID: 86614895}
+  indexTip: {fileID: 443043344}
+  logHz: 1
+  logStateLabel: 1
+  closedThreshold: 0.7
+  halfThreshold: 0.15
+  distClosedMax: 0.025
+  distHalfMax: 0.1
+  currentValue: 0
+  sessionMin: 1
+  sessionMax: 0
+  currentValueState: '?'
+  currentDistance: -1
+  distMin: 999
+  distMax: 0
+  currentDistState: '?'
+--- !u!114 &690067458
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 690067448}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9726469e02f049c7a416593ec8a1f332, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TranslateGestureDetector
+  thumbTip: {fileID: 86614895}
+  indexTip: {fileID: 443043344}
+  handAnchor: {fileID: 561393694}
+  palm: {fileID: 1089615691}
+  referenceCamera: {fileID: 1948693200}
+  vDistMin: 0.05
+  vDistMax: 0.12
+  vSustainSeconds: 0.15
+  minMotionDistance: 0.1
+  rightwardConeDegrees: 60
+  maxStraightnessDeviation: 0.35
+  pathSampleDistance: 0.01
+  palmSwipeWindowSeconds: 3
+  palmSwipeMinSpeed: 0.8
+  translateGestureName: Translate
+  msgSender: {fileID: 1234129723}
+  currentState: 0
+  currentThumbIndexDistance: 0
+  currentRightwardTravel: 0
+  currentPerpDeviation: 0
 --- !u!1001 &691032629
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -4491,6 +4564,11 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1007358708}
   m_CullTransparentMesh: 1
+--- !u!4 &1089615691 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2296945196532961950, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1109639963
 GameObject:
   m_ObjectHideFlags: 0

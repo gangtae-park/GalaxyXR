@@ -89,7 +89,7 @@ public class GestureRouter : MonoBehaviour
     void SendEvent(string gestureName, string eventType)
     {
         if (msgSender == null) return;
-        var payload = new CircleGestureRecognizer.CircleGesturePayload
+        var payload = new GestureEventPayload
         {
             gestureName = gestureName,
             eventType = eventType,
@@ -100,11 +100,11 @@ public class GestureRouter : MonoBehaviour
     void SendRecognized(string gestureName)
     {
         if (msgSender == null) return;
-        var payload = new CircleGestureRecognizer.CircleGesturePayload
+        var payload = new GestureEventPayload
         {
             gestureName = gestureName,
             eventType = "RECOGNIZED",
         };
-        msgSender.SendCircleGesture(payload);
+        msgSender.SendGestureRecognized(payload);
     }
 }

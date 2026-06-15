@@ -7,13 +7,6 @@ using UnityEngine.InputSystem;
 
 public class MsgSender : MonoBehaviour
 {
-    [Serializable]
-    public class GestureSignalPayload
-    {
-        public string gestureName;
-        public string eventType;
-    }
-
     public static MsgSender Instance { get; private set; }
 
     [Header("Network")]
@@ -104,25 +97,24 @@ public class MsgSender : MonoBehaviour
         SendPacket(msg);
     }
 
-    public void SendCircleGesture(CircleGestureRecognizer.CircleGesturePayload payload)
+    /// <summary>
+    /// Fire-and-forget "recognized" notice (single GESTURE packet). Use this when a
+    /// classifier has finalized a gesture name (e.g. Search/Find Info, Ask, Translate).
+    /// </summary>
+    public void SendGestureRecognized(GestureEventPayload payload)
     {
         if (payload == null)
         {
-            Debug.LogWarning("[SENDER] SendCircleGesture called with null payload.");
+            Debug.LogWarning("[SENDER] SendGestureRecognized called with null payload.");
             return;
         }
-
-        SendGesturePacket(
-            payload.gestureName
-        );
+        SendGesturePacket(payload.gestureName);
     }
 
-    public void SendGestureSignal(CircleGestureRecognizer.CircleGesturePayload payload)
-    {
-        SendCircleGesture(payload);
-    }
-
-    public void SendGestureEvent(CircleGestureRecognizer.CircleGesturePayload payload)
+    /// <summary>
+    /// State-transition packet (GESTURE_EVENT) carrying START / END / FAIL / RECOGNIZED.
+    /// </summary>
+    public void SendGestureEvent(GestureEventPayload payload)
     {
         if (payload == null)
         {

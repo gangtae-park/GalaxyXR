@@ -36,19 +36,11 @@ public class JackknifeGestureRecognizer : MonoBehaviour
     public int gpsrR = 2;
     public int minTemplatesToTrain = 4;
 
-    [Header("Stroke pre-filter (runs BEFORE Jackknife to reject obvious non-gestures)")]
-    [Tooltip("Reject strokes whose 2D bounding box width/height ratio is below this. " +
-             "Catches purely-vertical motions (just moving hand down/up) before they reach " +
-             "Jackknife. 0.1 = width must be at least 10% of height. Set 0 to disable.")]
+    [Header("Stroke pre-filter")]
     public float minWidthHeightRatio = 0.1f;
-    [Tooltip("Strokes shorter than this many points are also rejected. Stops jitter / noise.")]
     public int minPointCount = 8;
 
-    [Header("Reject labels (templates with these labels = explicit 'NOT a gesture')")]
-    [Tooltip("Any template whose label is in this list trains Jackknife as a normal class " +
-             "but Recognize() will return null when that class wins. Use it to teach the " +
-             "recognizer 'this motion = nothing'. Record samples of unintended motions " +
-             "(just down, just up, scribbles) under any of these labels.")]
+    [Header("Reject labels")]
     public string[] rejectLabels = new string[] { "false" };
 
     [Header("Status")]
@@ -82,8 +74,6 @@ public class JackknifeGestureRecognizer : MonoBehaviour
         _saveFilePath = Path.Combine(dir, saveFileName);
     }
 
-    /// <summary>(Re)load the template JSON and retrain Jackknife. Call after recording
-    /// new templates at runtime, or just rely on the Awake() call.</summary>
     [ContextMenu("Rebuild From Disk")]
     public void Rebuild()
     {
@@ -94,7 +84,7 @@ public class JackknifeGestureRecognizer : MonoBehaviour
         loadedTemplateCount = file.templates.Count;
         if (file.templates.Count == 0)
         {
-            Debug.LogWarning($"[Jackknife] no templates at {_saveFilePath}");
+            Debug.LogWarning($"[JackknifeRecognizer] no templates at {_saveFilePath}");
             return;
         }
 
@@ -136,7 +126,7 @@ public class JackknifeGestureRecognizer : MonoBehaviour
         if (added < minTemplatesToTrain)
         {
             Debug.LogWarning(
-                $"[Jackknife] only {added} templates (need >= {minTemplatesToTrain}). " +
+                $"[JackknifeRecognizer] only {added} templates (need >= {minTemplatesToTrain}). " +
                 "Not trained -- Recognize() will return null. Record more samples.");
             return;
         }
@@ -146,18 +136,15 @@ public class JackknifeGestureRecognizer : MonoBehaviour
             _jk.Train(gpsrN, gpsrR, beta);
             ready = true;
             Debug.Log(
-                $"[Jackknife] trained on {added} templates. " +
+                $"[JackknifeRecognizer] trained on {added} templates. " +
                 $"classes=[{string.Join(", ", knownGestures)}] " +
                 $"(resample={resampleCount}, beta={beta})");
         }
         catch (Exception e)
         {
-            Debug.LogError($"[Jackknife] Train() failed: {e}");
+            Debug.LogError($"[JackknifeRecognizer] Train() failed: {e}");
         }
     }
-
-    /// <summary>Classify a finished stroke. Returns the gesture class name, or null
-    /// if Jackknife rejected it (below the auto rejection threshold) / not ready.</summary>
     public string Recognize(Stroke stroke)
     {
         if (!ready || _jk == null || stroke == null) return null;
@@ -165,7 +152,7 @@ public class JackknifeGestureRecognizer : MonoBehaviour
         List<Vector2> pts2d = stroke.ProjectTo2DCameraPlane();
         if (pts2d == null || pts2d.Count < minPointCount)
         {
-            Debug.Log($"[Jackknife] pre-filter reject: too few points ({pts2d?.Count ?? 0} < {minPointCount})");
+            Debug.Log($"[JackknifeRecognizer] pre-filter reject: too few points ({pts2d?.Count ?? 0} < {minPointCount})");
             return null;
         }
 
@@ -190,7 +177,7 @@ public class JackknifeGestureRecognizer : MonoBehaviour
             if (wh < minWidthHeightRatio)
             {
                 Debug.Log(
-                    $"[Jackknife] pre-filter reject: bbox W/H={wh:F3} < {minWidthHeightRatio:F2} " +
+                    $"[JackknifeRecognizer] pre-filter reject: bbox W/H={wh:F3} < {minWidthHeightRatio:F2} " +
                     $"(W={bboxW:F3}m, H={bboxH:F3}m -- looks like a straight vertical motion)"
                 );
                 return null;
@@ -208,13 +195,13 @@ public class JackknifeGestureRecognizer : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"[Jackknife] Classify() threw: {e}");
+            Debug.LogError($"[JackknifeRecognizer] Classify() threw: {e}");
             return null;
         }
 
         if (gid < 0 || !_idToName.TryGetValue(gid, out string name))
         {
-            Debug.Log("[Jackknife] rejected (no class beat the rejection threshold)");
+            Debug.Log("[JackknifeRecognizer] rejected (no class beat the rejection threshold)");
             return null;
         }
 
@@ -225,13 +212,13 @@ public class JackknifeGestureRecognizer : MonoBehaviour
             {
                 if (!string.IsNullOrEmpty(rejectLabels[i]) && rejectLabels[i] == name)
                 {
-                    Debug.Log($"[Jackknife] matched reject label '{name}' -> treating as null");
+                    Debug.Log($"[JackknifeRecognizer] matched reject label '{name}' -> treating as null");
                     return null;
                 }
             }
         }
 
-        Debug.Log($"[Jackknife] recognized '{name}' (id={gid})");
+        Debug.Log($"[JackknifeRecognizer] recognized '{name}' (id={gid})");
         return name;
     }
 
@@ -246,7 +233,7 @@ public class JackknifeGestureRecognizer : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogWarning($"[Jackknife] load failed: {e.Message}");
+            Debug.LogWarning($"[JackknifeRecognizer] load failed: {e.Message}");
             return new TemplateFile();
         }
     }
