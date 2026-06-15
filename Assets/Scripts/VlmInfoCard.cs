@@ -85,6 +85,21 @@ public class VlmInfoCard : MonoBehaviour
         if (autoDestroy) _destroyAt = Time.time + autoDestroyAfterContent;
     }
 
+    public void SetContentTranslate(string sourceText, string translation)
+    {
+        _contentArrived = true;
+        if (loadingIndicator != null) loadingIndicator.SetActive(false);
+        if (contentRoot != null) contentRoot.SetActive(true);
+        if (titleText != null) titleText.text = "Translate Result";
+        if (bodyText != null)
+        {
+            bodyText.text = string.IsNullOrEmpty(translation)
+                ? "(no translation)"
+                : translation;
+        }
+        if (autoDestroy) _destroyAt = Time.time + autoDestroyAfterContent;
+    }
+
     public void SetError(string title, string message)
     {
         _contentArrived = true;

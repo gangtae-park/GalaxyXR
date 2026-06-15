@@ -1,18 +1,33 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 
 /*
-Listens to a PinchStrokeCapture and runs every registered classifier on each
-completed stroke. The classifier with the best confidence above the global
-threshold wins; its GestureName is sent to Python via MsgSender.
+Single owner of "Unity -> Python" gesture event traffic.
+
+Two input channels are stitched together here so MsgSender only ever sees
+one consistent stream of GESTURE_EVENT packets:
+
+  1) PinchStrokeCapture -> JackknifeGestureRecognizer (Search/Find Info, Ask)
+       stroke start    -> START   (gestureName = pendingReferentName)
+       stroke complete -> END     (gestureName = recognized name)  + RECOGNIZED
+                      OR  END+FAIL (gestureName = pendingReferentName) on reject
+       stroke cancel   -> FAIL    (gestureName = pendingReferentName)
+
+  2) TranslateGestureDetector (Translate via V band + sweep + palm swipe)
+       OnTranslateStarted     -> START
+       OnTranslateAreaDefined -> AREA_DEFINED
+       OnTranslateConfirmed   -> END + RECOGNIZED
+       OnTranslateCancelled   -> FAIL
+
+Detectors themselves do not touch MsgSender.
 */
 
 public class GestureRouter : MonoBehaviour
 {
     [Header("References")]
     public PinchStrokeCapture strokeCapture;
+    public TranslateGestureDetector translateDetector;
     public MsgSender msgSender;
     public JackknifeGestureRecognizer jackknifeRecognizer;
 
@@ -26,9 +41,16 @@ public class GestureRouter : MonoBehaviour
     {
         if (strokeCapture != null)
         {
-            strokeCapture.OnStrokeStarted   += HandleStarted;
-            strokeCapture.OnStrokeCompleted += HandleCompleted;
-            strokeCapture.OnStrokeCancelled += HandleCancelled;
+            strokeCapture.OnStrokeStarted   += HandleStrokeStarted;
+            strokeCapture.OnStrokeCompleted += HandleStrokeCompleted;
+            strokeCapture.OnStrokeCancelled += HandleStrokeCancelled;
+        }
+        if (translateDetector != null)
+        {
+            translateDetector.OnTranslateStarted     += HandleTranslateStarted;
+            translateDetector.OnTranslateAreaDefined += HandleTranslateAreaDefined;
+            translateDetector.OnTranslateConfirmed   += HandleTranslateConfirmed;
+            translateDetector.OnTranslateCancelled   += HandleTranslateCancelled;
         }
     }
 
@@ -36,39 +58,43 @@ public class GestureRouter : MonoBehaviour
     {
         if (strokeCapture != null)
         {
-            strokeCapture.OnStrokeStarted   -= HandleStarted;
-            strokeCapture.OnStrokeCompleted -= HandleCompleted;
-            strokeCapture.OnStrokeCancelled -= HandleCancelled;
+            strokeCapture.OnStrokeStarted   -= HandleStrokeStarted;
+            strokeCapture.OnStrokeCompleted -= HandleStrokeCompleted;
+            strokeCapture.OnStrokeCancelled -= HandleStrokeCancelled;
+        }
+        if (translateDetector != null)
+        {
+            translateDetector.OnTranslateStarted     -= HandleTranslateStarted;
+            translateDetector.OnTranslateAreaDefined -= HandleTranslateAreaDefined;
+            translateDetector.OnTranslateConfirmed   -= HandleTranslateConfirmed;
+            translateDetector.OnTranslateCancelled   -= HandleTranslateCancelled;
         }
     }
 
-    void HandleStarted(Stroke stroke)
+    // ---------- Pinch stroke pipeline (Search / Ask) ----------
+
+    void HandleStrokeStarted(Stroke stroke)
     {
         SendEvent(pendingReferentName, "START");
     }
 
-    void HandleCompleted(Stroke stroke)
+    void HandleStrokeCompleted(Stroke stroke)
     {
-        string referentName = null;
-
-        if (jackknifeRecognizer != null)
+        if (jackknifeRecognizer == null)
         {
-            try { referentName = jackknifeRecognizer.Recognize(stroke); }
-            catch (Exception e) { Debug.LogError($"[GestureRouter] Jackknife threw: {e}"); }
-        }
-        else
-        {
-            Debug.LogError($"[GestureRouter] Can't find Jackknife recognizer");
+            Debug.LogError("[GestureRouter] Jackknife recognizer not assigned");
             return;
         }
+
+        string referentName = null;
+        try { referentName = jackknifeRecognizer.Recognize(stroke); }
+        catch (Exception e) { Debug.LogError($"[GestureRouter] Jackknife threw: {e}"); }
 
         if (!string.IsNullOrEmpty(referentName))
         {
             Debug.Log($"[GestureRouter] RECOGNIZED: {referentName}");
-            // Send END with the final name so Python's handler dispatches correctly.
             SendEvent(referentName, "END");
-            // Then send a RECOGNIZED packet (informational; Python END already triggers VLM).
-            SendRecognized(referentName);
+            SendEvent(referentName, "RECOGNIZED");
             try { OnGestureRecognized?.Invoke(referentName); } catch (Exception e) { Debug.LogError(e); }
         }
         else
@@ -80,11 +106,39 @@ public class GestureRouter : MonoBehaviour
         }
     }
 
-    void HandleCancelled()
+    void HandleStrokeCancelled()
     {
         SendEvent(pendingReferentName, "FAIL");
         try { OnGestureFailed?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
+
+    // ---------- Translate detector pipeline ----------
+
+    void HandleTranslateStarted(string gestureName)
+    {
+        SendEvent(gestureName, "START");
+    }
+
+    void HandleTranslateAreaDefined(string gestureName)
+    {
+        SendEvent(gestureName, "AREA_DEFINED");
+    }
+
+    void HandleTranslateConfirmed(string gestureName)
+    {
+        Debug.Log($"[GestureRouter] TRANSLATE CONFIRMED: {gestureName}");
+        SendEvent(gestureName, "END");
+        SendEvent(gestureName, "RECOGNIZED");
+        try { OnGestureRecognized?.Invoke(gestureName); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    void HandleTranslateCancelled(string gestureName)
+    {
+        SendEvent(gestureName, "FAIL");
+        try { OnGestureFailed?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    // ---------- Wire output ----------
 
     void SendEvent(string gestureName, string eventType)
     {
@@ -95,16 +149,5 @@ public class GestureRouter : MonoBehaviour
             eventType = eventType,
         };
         msgSender.SendGestureEvent(payload);
-    }
-
-    void SendRecognized(string gestureName)
-    {
-        if (msgSender == null) return;
-        var payload = new GestureEventPayload
-        {
-            gestureName = gestureName,
-            eventType = "RECOGNIZED",
-        };
-        msgSender.SendGestureRecognized(payload);
     }
 }

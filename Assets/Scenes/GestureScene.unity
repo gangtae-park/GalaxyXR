@@ -369,6 +369,11 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 89318626}
   m_CullTransparentMesh: 1
+--- !u!4 &106396715 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2339806236364360480, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &123424312
 GameObject:
   m_ObjectHideFlags: 0
@@ -1547,6 +1552,11 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 375196258}
   m_CullTransparentMesh: 1
+--- !u!4 &436581128 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2611346724408631121, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &443043344 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1695062569140642049, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
@@ -2146,6 +2156,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 5030734267259534325, guid: e2698219e3231e94c8765d49b9dd5cff, type: 3}
   m_PrefabInstance: {fileID: 611616339}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &634728707 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 7665206368578903129, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &659511933
 GameObject:
   m_ObjectHideFlags: 0
@@ -2221,6 +2236,16 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 659511933}
   m_CullTransparentMesh: 1
+--- !u!4 &660256725 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 6437678303800985931, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &668166183 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 7804129366805770488, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &680485292
 GameObject:
   m_ObjectHideFlags: 0
@@ -2326,15 +2351,14 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 690067450}
-  - component: {fileID: 690067449}
-  - component: {fileID: 690067453}
-  - component: {fileID: 690067452}
   - component: {fileID: 690067454}
   - component: {fileID: 690067451}
   - component: {fileID: 690067455}
   - component: {fileID: 690067456}
   - component: {fileID: 690067457}
   - component: {fileID: 690067458}
+  - component: {fileID: 690067459}
+  - component: {fileID: 690067460}
   m_Layer: 0
   m_Name: GestureManager
   m_TagString: Untagged
@@ -2342,28 +2366,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &690067449
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 690067448}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cafc8e7272b334e9498508c519ce42ba, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CircleGestureRecognizer
-  handAnchor: {fileID: 5534409079552104246}
-  indexTip: {fileID: 443043344}
-  msgSender: {fileID: 1234129723}
-  pinchAction: {fileID: 187161793506945269, guid: c348712bda248c246b8c49b3db54643f, type: 3}
-  pinchValueThreshold: 0.7
-  minSampleDistance: 0.01
-  minPointCount: 12
-  maxRadiusStdRatio: 0.35
-  maxStartEndDistance: 0.1
-  minWidthHeightRatio: 0.4
 --- !u!4 &690067450
 Transform:
   m_ObjectHideFlags: 0
@@ -2392,46 +2394,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GestureRouter
   strokeCapture: {fileID: 690067454}
+  translateDetector: {fileID: 690067458}
   msgSender: {fileID: 1234129723}
   jackknifeRecognizer: {fileID: 690067456}
   pendingReferentName: Pending
---- !u!114 &690067452
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 690067448}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 067112ac7d7cf4bbf84e7f5497d62ac3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::QuestionMarkClassifier
-  gestureName: Ask
-  minPointCount: 12
-  maxMatchDistance: 0.2
-  useNegativeTemplates: 1
-  requiredMargin: 0.05
-  templateSamples: []
-  decoyTemplates: []
---- !u!114 &690067453
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 690067448}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bb00668c797f24f6a8b06dfc9c7569e2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CircleClassifier
-  gestureName: Search/Find Info
-  minPointCount: 12
-  maxRadiusStdRatio: 0.35
-  maxStartEndDistance: 0.1
-  minWidthHeightRatio: 0.4
-  minMeanRadius: 0.025
 --- !u!114 &690067454
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2465,7 +2431,7 @@ MonoBehaviour:
   jackknifeRecognizer: {fileID: 690067456}
   referentLabel: false
   recordOnNextStroke: 0
-  recordingAction: {fileID: -6131295136447488360, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  recordingAction: {fileID: 0}
   subDirectory: GestureTemplates
   saveFileName: gesture_templates.json
   resetOnNextRecord: 0
@@ -2507,7 +2473,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 690067448}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 771357dc97b30484e8e55724fee6001d, type: 3}
   m_Name: 
@@ -2541,26 +2507,97 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9726469e02f049c7a416593ec8a1f332, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TranslateGestureDetector
+  handJoints:
+  - {fileID: 106396715}
+  - {fileID: 86614895}
+  - {fileID: 1348103847}
+  - {fileID: 1878030857}
+  - {fileID: 1225231139}
+  - {fileID: 2059325953}
+  - {fileID: 994979371}
+  - {fileID: 660256725}
+  - {fileID: 1089615691}
+  - {fileID: 1053925136}
+  - {fileID: 1195262351}
+  - {fileID: 2065448784}
+  - {fileID: 668166183}
+  - {fileID: 1233867596}
+  - {fileID: 1367863059}
+  - {fileID: 1718678180}
+  - {fileID: 1400367987}
+  - {fileID: 443043344}
+  - {fileID: 1926617300}
+  - {fileID: 634728707}
+  - {fileID: 436581128}
+  jointOrigin: {fileID: 561393694}
+  normalizeToCameraOrientation: 1
   thumbTip: {fileID: 86614895}
   indexTip: {fileID: 443043344}
-  handAnchor: {fileID: 561393694}
   palm: {fileID: 1089615691}
+  handAnchor: {fileID: 106396715}
   referenceCamera: {fileID: 1948693200}
-  vDistMin: 0.05
-  vDistMax: 0.12
-  vSustainSeconds: 0.15
-  minMotionDistance: 0.1
-  rightwardConeDegrees: 60
-  maxStraightnessDeviation: 0.35
-  pathSampleDistance: 0.01
+  minFrameInterval: 0.03
+  maxBufferSeconds: 2.5
+  recognitionIntervalSeconds: 0.2
+  minFramesForRecognition: 12
   palmSwipeWindowSeconds: 3
   palmSwipeMinSpeed: 0.8
+  confirmCooldownSeconds: 1
   translateGestureName: Translate
-  msgSender: {fileID: 1234129723}
-  currentState: 0
-  currentThumbIndexDistance: 0
-  currentRightwardTravel: 0
-  currentPerpDeviation: 0
+  translateRecognizer: {fileID: 690067459}
+  externalPause: 0
+  awaitingSwipe: 0
+  bufferFrameCount: 0
+--- !u!114 &690067459
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 690067448}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8829c12ec2454b37a0f16677e217683a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::JackknifeTranslateRecognizer
+  subDirectory: GestureTemplates
+  saveFileName: gesture_templates_translate.json
+  resampleCount: 32
+  radius: 1
+  useEuclidean: 0
+  beta: 0.1
+  gpsrN: 6
+  gpsrR: 2
+  minTemplatesToTrain: 4
+  minFrameCount: 8
+  rejectLabels:
+  - false
+  loadedTemplateCount: 0
+  featureDim: -1
+  knownGestures: []
+  ready: 0
+--- !u!114 &690067460
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 690067448}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27c62ac7e9024f9a995263aeb297070e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TranslateTemplateRecorder
+  detector: {fileID: 690067458}
+  recognizer: {fileID: 690067459}
+  recordingAction: {fileID: -6131295136447488360, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  recordingActionThreshold: 0.7
+  recordingLabel: false
+  resetOnNextRecord: 0
+  minFrameInterval: 0.03
+  maxRecordingSeconds: 6
+  isRecording: 0
+  recordedFrameCount: 0
 --- !u!1001 &691032629
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -4343,6 +4380,11 @@ Canvas:
   m_SortingLayerID: 0
   m_SortingOrder: 1
   m_TargetDisplay: 0
+--- !u!4 &994979371 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 6036169748970538392, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &1004500090
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -4564,6 +4606,11 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1007358708}
   m_CullTransparentMesh: 1
+--- !u!4 &1053925136 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 6643823106585430204, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &1089615691 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2296945196532961950, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
@@ -5066,6 +5113,21 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 8969571752666551114, guid: 657321a07c3561043af55547ec4b0ed7, type: 3}
   m_PrefabInstance: {fileID: 1189763045}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &1195262351 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 7502744809559723211, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &1225231139 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1454067642933487055, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &1233867596 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 3749030003948957411, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1234129718
 GameObject:
   m_ObjectHideFlags: 0
@@ -5454,6 +5516,11 @@ Transform:
   - {fileID: 547215373}
   m_Father: {fileID: 1434975003}
   m_LocalEulerAnglesHint: {x: 0, y: 72, z: 0}
+--- !u!4 &1348103847 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4610536674911268298, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1351530910
 GameObject:
   m_ObjectHideFlags: 0
@@ -5539,6 +5606,11 @@ Canvas:
   m_SortingLayerID: 0
   m_SortingOrder: 1
   m_TargetDisplay: 0
+--- !u!4 &1367863059 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2379399411250219373, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1373282166
 GameObject:
   m_ObjectHideFlags: 0
@@ -5618,6 +5690,11 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1373282166}
   m_CullTransparentMesh: 0
+--- !u!4 &1400367987 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4234128226495377231, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1434975002
 GameObject:
   m_ObjectHideFlags: 0
@@ -6490,6 +6567,11 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1691745543}
   m_CullTransparentMesh: 0
+--- !u!4 &1718678180 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4820869512531294039, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1726903307
 GameObject:
   m_ObjectHideFlags: 0
@@ -6801,6 +6883,11 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1874101525}
   m_CullTransparentMesh: 0
+--- !u!4 &1878030857 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 285005686507933477, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!114 &1879067437 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 8535804950626849423, guid: cc0d6bd3aca3b5d4a986e27ce112e071, type: 3}
@@ -6986,6 +7073,11 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1895556601}
   m_CullTransparentMesh: 0
+--- !u!4 &1926617300 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2162714242004346942, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1930256997
 GameObject:
   m_ObjectHideFlags: 0
@@ -7374,6 +7466,7 @@ GameObject:
   - component: {fileID: 1980331416}
   - component: {fileID: 1980331415}
   - component: {fileID: 1980331418}
+  - component: {fileID: 1980331419}
   m_Layer: 0
   m_Name: VlmManager
   m_TagString: Untagged
@@ -7418,6 +7511,7 @@ MonoBehaviour:
   minCameraDistance: 0.4
   gestureNameFilters:
   - Search/Find Info
+  - Translate
   replacePreviousCard: 1
   verboseLogging: 1
 --- !u!114 &1980331416
@@ -7433,7 +7527,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GestureAnchorTracker
   gestureRouter: {fileID: 690067451}
-  gestureRecognizer: {fileID: 0}
   eyeGazeReader: {fileID: 1234129721}
   referenceCamera: {fileID: 1948693200}
   pinchAction: {fileID: 187161793506945269, guid: c348712bda248c246b8c49b3db54643f, type: 3}
@@ -7481,6 +7574,26 @@ MonoBehaviour:
   minCameraDistance: 0.4
   replacePreviousCard: 1
   verboseLogging: 1
+--- !u!114 &1980331419
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1980331413}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 560631dfba7e4e1d9b3f16dbbff96b33, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TranslateAreaVisualizer
+  translateDetector: {fileID: 690067458}
+  referenceCamera: {fileID: 1948693200}
+  overlayPrefab: {fileID: 0}
+  overlayColor: {r: 0.8387771, g: 0.94693834, b: 0.9716981, a: 0.35}
+  minDimensionMeters: 0.05
+  padMeters: 0.02
+  leftPadMeters: 0.06
+  placementDistance: 1.8
 --- !u!1 &1985586551
 GameObject:
   m_ObjectHideFlags: 0
@@ -7736,10 +7849,20 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2050916413}
   m_CullTransparentMesh: 1
+--- !u!4 &2059325953 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5505948963198418833, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &2063322578 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2130331530761912220, guid: d661f645c81f29b4aa596207971ae441, type: 3}
   m_PrefabInstance: {fileID: 2130331532795802190}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &2065448784 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 256863689800588959, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
+  m_PrefabInstance: {fileID: 5534409079552104243}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &2069439978
 PrefabInstance:
@@ -9123,11 +9246,6 @@ MonoBehaviour:
   m_LightEstimation: 0
   m_FacingDirection: 1
   m_RenderMode: 0
---- !u!4 &5534409079552104246 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 6311120899289156754, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}
-  m_PrefabInstance: {fileID: 5534409079552104243}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &5715416335952834191
 PrefabInstance:
   m_ObjectHideFlags: 0

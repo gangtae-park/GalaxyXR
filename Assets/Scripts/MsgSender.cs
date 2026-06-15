@@ -98,21 +98,9 @@ public class MsgSender : MonoBehaviour
     }
 
     /// <summary>
-    /// Fire-and-forget "recognized" notice (single GESTURE packet). Use this when a
-    /// classifier has finalized a gesture name (e.g. Search/Find Info, Ask, Translate).
-    /// </summary>
-    public void SendGestureRecognized(GestureEventPayload payload)
-    {
-        if (payload == null)
-        {
-            Debug.LogWarning("[SENDER] SendGestureRecognized called with null payload.");
-            return;
-        }
-        SendGesturePacket(payload.gestureName);
-    }
-
-    /// <summary>
-    /// State-transition packet (GESTURE_EVENT) carrying START / END / FAIL / RECOGNIZED.
+    /// Single entry point for gesture life-cycle packets. Wire format:
+    ///   GESTURE_EVENT,<seq>,<time>,<gestureName>,<eventType>
+    /// where eventType is one of START / END / FAIL / RECOGNIZED / AREA_DEFINED / ...
     /// </summary>
     public void SendGestureEvent(GestureEventPayload payload)
     {
@@ -134,23 +122,6 @@ public class MsgSender : MonoBehaviour
         );
 
         Debug.Log($"[SENDER] Sending gesture event packet: {msg}");
-
-        seq++;
-        SendPacket(msg);
-    }
-
-    public void SendGesturePacket(string gestureName)
-    {
-        string safeGestureName = string.IsNullOrEmpty(gestureName) ? "UnknownGesture" : gestureName.Replace(",", "_");
-
-        string msg = string.Join(",",
-            "GESTURE",
-            seq.ToString(CultureInfo.InvariantCulture),
-            Time.unscaledTime.ToString("F4", CultureInfo.InvariantCulture),
-            safeGestureName
-        );
-
-        Debug.Log($"[SENDER] Sending gesture packet: {msg}");
 
         seq++;
         SendPacket(msg);

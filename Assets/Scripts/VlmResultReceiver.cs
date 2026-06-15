@@ -16,6 +16,7 @@ public class VlmResultReceiver : MonoBehaviour
         public string typical_use;
         public string info;
         public string answer;
+        public string translation;       // populated by the Translate handler (Korean output)
         public string error;             // populated if Python reports vlm_call_failed
         public string raw;               // populated if model returned non-JSON
         public string finish_reason;

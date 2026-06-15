@@ -31,7 +31,7 @@ public class VlmInfoCardSpawner : MonoBehaviour
     [Tooltip("Spawn / populate cards only when the gesture name is in this list. " +
              "Leave empty to accept ANY gesture. " +
              "NOTE: 'Ask' is intentionally NOT here -- AskCardSpawner handles Ask flow itself.")]
-    public string[] gestureNameFilters = new string[] { "Search/Find Info" };
+    public string[] gestureNameFilters = new string[] { "Search/Find Info", "Translate" };
     public bool replacePreviousCard = true;
     public bool verboseLogging = true;
 
@@ -154,6 +154,10 @@ public class VlmInfoCardSpawner : MonoBehaviour
         else if (ges == "Ask")
         {
             _currentCard.SetContentAsk(r.name, r.answer);
+        }
+        else if (ges == "Translate")
+        {
+            _currentCard.SetContentTranslate(r.name, r.translation);
         }
 
         if (verboseLogging)
