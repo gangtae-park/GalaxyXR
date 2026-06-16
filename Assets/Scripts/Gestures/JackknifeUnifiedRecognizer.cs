@@ -51,9 +51,7 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
     public int minFrameCount = 8;
 
     [Header("Reject labels")]
-    [Tooltip("Templates with these labels train Jackknife normally but Recognize() returns " +
-             "null when they win. Use them to teach 'this is NOT a real referent'.")]
-    public string[] rejectLabels = new string[] { "false" };
+    public string[] rejectLabels = new string[] { "False" };
 
     [Header("Status")]
     [SerializeField] private int loadedTemplateCount;
@@ -242,13 +240,14 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         return name;
     }
 
-    /// <summary>
-    /// Append a recorded trajectory to the templates file.
-    /// `retrain` controls whether Jackknife is retrained immediately (expensive --
-    /// scales as templates * gpsrN * gpsrR * resampleCount * featureDim). The
-    /// recording scene should pass retrain=false to keep the save snappy; the
-    /// inference scene calls Rebuild() once at startup.
-    /// </summary>
+    /*
+    Append a recorded trajectory to the templates file.
+    `retrain` controls whether Jackknife is retrained immediately (expensive --
+    scales as templates * gpsrN * gpsrR * resampleCount * featureDim). The
+    recording scene should pass retrain=false to keep the save snappy; the
+    inference scene calls Rebuild() once at startup.
+    */
+
     public bool AppendTemplate(string label, List<float[]> frames, bool retrain = true)
     {
         if (string.IsNullOrEmpty(label) || frames == null || frames.Count < 2)

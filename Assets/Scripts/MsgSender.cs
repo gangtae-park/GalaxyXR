@@ -97,11 +97,6 @@ public class MsgSender : MonoBehaviour
         SendPacket(msg);
     }
 
-    /// <summary>
-    /// Single entry point for gesture life-cycle packets. Wire format:
-    ///   GESTURE_EVENT,<seq>,<time>,<gestureName>,<eventType>
-    /// where eventType is one of START / END / FAIL / RECOGNIZED / AREA_DEFINED / ...
-    /// </summary>
     public void SendGestureEvent(GestureEventPayload payload)
     {
         if (payload == null)
@@ -127,11 +122,6 @@ public class MsgSender : MonoBehaviour
         SendPacket(msg);
     }
 
-    /// <summary>
-    /// Send a free-text user question for the most recent Ask gesture target.
-    /// Wire format:  ASK_QUESTION,<seq>,<time>,<question (may contain commas)>
-    /// Newlines are stripped so the packet stays a single line.
-    /// </summary>
     public void SendAskQuestion(string question)
     {
         if (string.IsNullOrWhiteSpace(question))
