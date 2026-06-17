@@ -8,10 +8,7 @@ AskQuestionCard
 
 Spawned when the Ask gesture's first VLM result arrives (object identified).
 Shows the object name and waits for the user's voice question to be captured.
-When the question text is ready, call Submit(question) -- the card stores the
-question text, switches its status to "Thinking...", and fires OnQuestionSubmitted
-so the spawner can hand the question off to MsgSender. The card stays alive
-until the spawner destroys it on the second Ask result arrival.
+The card stays alive until the spawner destroys it on the second Ask result arrival.
 */
 
 public class AskQuestionCard : MonoBehaviour
