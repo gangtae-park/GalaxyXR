@@ -7,17 +7,10 @@ using UnityEngine.InputSystem;
 
 public class MsgSender : MonoBehaviour
 {
-    [Serializable]
-    public class GestureSignalPayload
-    {
-        public string gestureName;
-        public string eventType;
-    }
-
     public static MsgSender Instance { get; private set; }
 
     [Header("Network")]
-    public string serverIP = "192.168.0.0";
+    public string serverIP = "192.168.0.8";
     public int port = 5005;
 
     [Header("Assign from Input Actions")]
@@ -104,25 +97,7 @@ public class MsgSender : MonoBehaviour
         SendPacket(msg);
     }
 
-    public void SendCircleGesture(CircleGestureRecognizer.CircleGesturePayload payload)
-    {
-        if (payload == null)
-        {
-            Debug.LogWarning("[SENDER] SendCircleGesture called with null payload.");
-            return;
-        }
-
-        SendGesturePacket(
-            payload.gestureName
-        );
-    }
-
-    public void SendGestureSignal(CircleGestureRecognizer.CircleGesturePayload payload)
-    {
-        SendCircleGesture(payload);
-    }
-
-    public void SendGestureEvent(CircleGestureRecognizer.CircleGesturePayload payload)
+    public void SendGestureEvent(GestureEventPayload payload)
     {
         if (payload == null)
         {
@@ -147,28 +122,6 @@ public class MsgSender : MonoBehaviour
         SendPacket(msg);
     }
 
-    public void SendGesturePacket(string gestureName)
-    {
-        string safeGestureName = string.IsNullOrEmpty(gestureName) ? "UnknownGesture" : gestureName.Replace(",", "_");
-
-        string msg = string.Join(",",
-            "GESTURE",
-            seq.ToString(CultureInfo.InvariantCulture),
-            Time.unscaledTime.ToString("F4", CultureInfo.InvariantCulture),
-            safeGestureName
-        );
-
-        Debug.Log($"[SENDER] Sending gesture packet: {msg}");
-
-        seq++;
-        SendPacket(msg);
-    }
-
-    /// <summary>
-    /// Send a free-text user question for the most recent Ask gesture target.
-    /// Wire format:  ASK_QUESTION,<seq>,<time>,<question (may contain commas)>
-    /// Newlines are stripped so the packet stays a single line.
-    /// </summary>
     public void SendAskQuestion(string question)
     {
         if (string.IsNullOrWhiteSpace(question))
