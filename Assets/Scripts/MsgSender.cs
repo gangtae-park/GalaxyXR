@@ -10,7 +10,7 @@ public class MsgSender : MonoBehaviour
     public static MsgSender Instance { get; private set; }
 
     [Header("Network")]
-    public string serverIP = "192.168.0.0";
+    public string serverIP = "192.168.0.8";
     public int port = 5005;
 
     [Header("Assign from Input Actions")]
