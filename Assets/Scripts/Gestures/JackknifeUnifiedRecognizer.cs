@@ -9,26 +9,18 @@ using JKVector = Jackknife.Vector;
 using JKRecognizer = Jackknife.Jackknife;
 
 /*
-JackknifeUnifiedRecognizer
-
 Single Jackknife instance trained on every referent's pose-trajectory template.
-Used by the gesture recognition scene to classify pinch-bounded buffers into
-one of:
-    "Search/Find Info" | "Ask" | "Compare" | "Translate" | "Anchor" | "false"
-(Capture and Save/Store are detected separately via static-pose components,
-not this recognizer.)
+Used by the gesture recognition scene to classify pinch-bounded buffers into one of the refrents and "false".
 
 Template format on disk (gesture_templates_unified.json):
     {
-      "templates": [
-        { "label": "...", "frames": [{ "values": [f0, f1, ...] }, ...] },
-        ...
-      ]
+        "templates": [
+            { "label": "...", "frames": [{ "values": [f0, f1, ...] }, ...] },
+            ...
+        ]
     }
 
-Each "values" array length must equal featureDim (= handJoints.Length * 3
-from HandFeatureSource). The first non-empty template fixes featureDim; later
-templates with mismatched dim are skipped during Rebuild.
+Each "values" array length must equal featureDim (= handJoints.Length * 3 from HandFeatureSource).
 */
 
 public class JackknifeUnifiedRecognizer : MonoBehaviour
@@ -112,7 +104,7 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         if (file.templates.Count == 0)
         {
             featureDim = -1;
-            Debug.LogWarning($"[JackknifeUnified] no templates at {_saveFilePath}");
+            Debug.LogWarning($"[StudyLog][JackknifeRecognizer] no templates at {_saveFilePath}");
             return;
         }
 
@@ -124,7 +116,7 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         }
         if (featureDim <= 0)
         {
-            Debug.LogWarning("[JackknifeUnified] templates exist but every frame is empty.");
+            Debug.LogWarning("[StudyLog][JackknifeRecognizer] templates exist but every frame is empty.");
             return;
         }
 
@@ -163,7 +155,7 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
             }
             if (dimMismatch)
             {
-                Debug.LogWarning($"[JackknifeUnified] template #{i} (label='{t.label}') has mismatched dim. Skipping.");
+                Debug.LogWarning($"[StudyLog][JackknifeRecognizer] template #{i} (label='{t.label}') has mismatched dim. Skipping.");
                 continue;
             }
             sample.AddTrajectory(traj);
@@ -175,10 +167,7 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
 
         if (added < minTemplatesToTrain)
         {
-            Debug.LogWarning(
-                $"[JackknifeUnified] only {added} templates (need >= {minTemplatesToTrain}). " +
-                "Not trained -- Recognize() returns null until more samples are recorded."
-            );
+            Debug.LogWarning($"[StudyLog][JackknifeRecognizer] only {added} templates (need >= {minTemplatesToTrain}). ");
             return;
         }
 
@@ -187,13 +176,13 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
             _jk.Train(gpsrN, gpsrR, beta);
             ready = true;
             Debug.Log(
-                $"[JackknifeUnified] trained on {added} templates, featureDim={featureDim}. " +
+                $"[StudyLog][JackknifeRecognizer] trained on {added} templates, featureDim={featureDim}. " +
                 $"classes=[{string.Join(", ", knownGestures)}]"
             );
         }
         catch (Exception e)
         {
-            Debug.LogError($"[JackknifeUnified] Train() failed: {e}");
+            Debug.LogError($"[StudyLog][JackknifeRecognizer] Train() failed: {e}");
         }
     }
 
@@ -202,7 +191,7 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         if (!ready || _jk == null || trajectory == null) return null;
         if (trajectory.Count < minFrameCount)
         {
-            Debug.Log($"[JackknifeUnified] pre-filter reject: too few frames ({trajectory.Count} < {minFrameCount})");
+            Debug.Log($"[StudyLog][JackknifeRecognizer] REJECT: too few frames ({trajectory.Count} < {minFrameCount})");
             return null;
         }
 
@@ -211,7 +200,7 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         {
             if (f == null || f.Length != featureDim)
             {
-                Debug.LogWarning($"[JackknifeUnified] frame dim mismatch (got {f?.Length ?? 0}, expected {featureDim}).");
+                Debug.LogWarning($"[StudyLog][JackknifeRecognizer] REJECT: frame dim mismatch (got {f?.Length ?? 0}, expected {featureDim}).");
                 return null;
             }
             var doubles = new List<double>(featureDim);
@@ -221,38 +210,36 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
 
         int gid;
         try { gid = _jk.Classify(traj); }
-        catch (Exception e) { Debug.LogError($"[JackknifeUnified] Classify threw: {e}"); return null; }
+        catch (Exception e) { Debug.LogError($"[StudyLog][JackknifeRecognizer] Classify threw: {e}"); return null; }
 
         if (gid < 0 || !_idToName.TryGetValue(gid, out string name))
         {
-            Debug.Log("[JackknifeUnified] rejected (no class beat the rejection threshold)");
+            Debug.Log("[StudyLog][JackknifeRecognizer] REJECT: no class beat the rejection threshold");
             return null;
         }
         if (rejectLabels != null)
             for (int i = 0; i < rejectLabels.Length; i++)
                 if (!string.IsNullOrEmpty(rejectLabels[i]) && rejectLabels[i] == name)
                 {
-                    Debug.Log($"[JackknifeUnified] matched reject label '{name}' -> null");
+                    Debug.Log($"[StudyLog][JackknifeRecognizer] REJECT: matched reject label '{name}'");
                     return null;
                 }
 
-        Debug.Log($"[JackknifeUnified] recognized '{name}' (id={gid})");
+        Debug.Log($"[StudyLog][JackknifeRecognizer] RECOGNIZED: '{name}'");
         return name;
     }
 
     /*
     Append a recorded trajectory to the templates file.
-    `retrain` controls whether Jackknife is retrained immediately (expensive --
-    scales as templates * gpsrN * gpsrR * resampleCount * featureDim). The
-    recording scene should pass retrain=false to keep the save snappy; the
-    inference scene calls Rebuild() once at startup.
+    `retrain` controls whether Jackknife is retrained immediately.
+    The inference scene calls Rebuild() once at startup.
     */
 
     public bool AppendTemplate(string label, List<float[]> frames, bool retrain = true)
     {
         if (string.IsNullOrEmpty(label) || frames == null || frames.Count < 2)
         {
-            Debug.LogWarning($"[JackknifeUnified] AppendTemplate rejected: label='{label}', frames={frames?.Count ?? 0}");
+            Debug.LogWarning($"[JackknifeRecorder] AppendTemplate REJECT: label='{label}', frames={frames?.Count ?? 0}");
             return false;
         }
         TemplateFile file = LoadFile();
@@ -268,9 +255,9 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
 
         if (!SaveFile(file))
         {
-            // Save failed -- don't pretend we appended. UI will stay at the previous count.
+            // Save failed. UI will stay at the previous count.
             Debug.LogError(
-                $"[JackknifeUnified] AppendTemplate('{label}') NOT saved to disk. " +
+                $"[JackknifeRecorder] AppendTemplate('{label}') NOT saved to disk. " +
                 $"Attempted path: {_saveFilePath}"
             );
             return false;
@@ -282,9 +269,8 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         if (retrain) Rebuild();
 
         Debug.Log(
-            $"[JackknifeUnified] appended '{label}' frames={frames.Count} " +
-            $"featureDim={(frames.Count > 0 ? frames[0]?.Length ?? 0 : 0)}. " +
-            $"Total templates: {file.templates.Count} (retrain={retrain})"
+            $"[JackknifeRecorder] AppendTemplate '{label}' frames={frames.Count} | " +
+            $"Total templates: {file.templates.Count}"
         );
         return true;
     }
@@ -295,10 +281,10 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         if (File.Exists(_saveFilePath))
         {
             try { File.Delete(_saveFilePath); }
-            catch (Exception e) { Debug.LogError($"[JackknifeUnified] clear failed: {e}"); return; }
+            catch (Exception e) { Debug.LogError($"[JackknifeRecorder] clear failed: {e}"); return; }
         }
         Rebuild();
-        Debug.Log("[JackknifeUnified] all templates cleared.");
+        Debug.Log("[JackknifeRecorder] all templates cleared.");
     }
 
     TemplateFile LoadFile()
@@ -312,7 +298,7 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogWarning($"[JackknifeUnified] load failed: {e.Message}");
+            Debug.LogWarning($"[StudyLog][JackknifeRecorder] load failed: {e.Message}");
             return new TemplateFile();
         }
     }
@@ -325,21 +311,15 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
             string json = JsonUtility.ToJson(file, true);
 
-            // Delete the existing file first if it's there. Some Android scoped-
-            // storage states leave stale files with permissions that block direct
-            // overwrite by File.WriteAllText; deleting then recreating sidesteps
-            // it. The try block around Delete keeps us moving if the file is
-            // missing or already unwritable -- the subsequent write will surface
-            // the real error.
             try { if (File.Exists(_saveFilePath)) File.Delete(_saveFilePath); }
-            catch (Exception delEx) { Debug.LogWarning($"[JackknifeUnified] pre-write delete failed (ignored): {delEx.Message}"); }
+            catch (Exception delEx) { Debug.LogWarning($"[JackknifeRecorder] pre-write delete failed (ignored): {delEx.Message}"); }
 
             File.WriteAllText(_saveFilePath, json);
             return true;
         }
         catch (Exception e)
         {
-            Debug.LogError($"[JackknifeUnified] save failed at '{_saveFilePath}': {e}");
+            Debug.LogError($"[JackknifeRecorder] save failed at '{_saveFilePath}': {e}");
             return false;
         }
     }
@@ -348,10 +328,10 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
     public void DiagnoseSavePath()
     {
         ResolvePath();
-        Debug.Log($"[JackknifeUnified] save path = {_saveFilePath}");
-        Debug.Log($"[JackknifeUnified] file exists = {File.Exists(_saveFilePath)}");
+        Debug.Log($"[JackknifeRecorder] save path = {_saveFilePath}");
+        Debug.Log($"[JackknifeRecorder] file exists = {File.Exists(_saveFilePath)}");
         string dir = Path.GetDirectoryName(_saveFilePath);
-        Debug.Log($"[JackknifeUnified] dir exists = {Directory.Exists(dir)} ({dir})");
+        Debug.Log($"[JackknifeRecorder] dir exists = {Directory.Exists(dir)} ({dir})");
         // Try a probe write next to the target to see if the dir is writable.
         string probe = Path.Combine(dir ?? "", "_probe_" + System.Guid.NewGuid().ToString("N") + ".txt");
         try
@@ -359,11 +339,11 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
             if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
             File.WriteAllText(probe, "ok");
             File.Delete(probe);
-            Debug.Log("[JackknifeUnified] probe write OK -- directory is writable");
+            Debug.Log("[JackknifeRecorder] probe write OK -- directory is writable");
         }
         catch (Exception e)
         {
-            Debug.LogError($"[JackknifeUnified] probe write FAILED: {e.Message}");
+            Debug.LogError($"[JackknifeRecorder] probe write FAILED: {e.Message}");
         }
     }
 }

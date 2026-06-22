@@ -7,13 +7,8 @@ using System.Threading;
 using UnityEngine;
 
 /*
-VlmResultReceiver
-
-Listens on a UDP port for "VLM_RESULT|{json}" datagrams from the MacProgram
-and re-emits each parsed payload on the main thread via the OnResult event.
-
-Per-gesture spawners (SearchResultCardSpawner, etc.) subscribe to OnResult,
-filter by payload.gesture, and instantiate their own card prefab.
+Listens on a UDP port for "VLM_RESULT|{json}" datagrams from the MacProgram and re-emits each parsed payload on the main thread via the OnResult event.
+Per-gesture spawners subscribe to OnResult, filter by payload.gesture, and instantiate their own card prefab.
 */
 
 public class VlmResultReceiver : MonoBehaviour
@@ -81,7 +76,7 @@ public class VlmResultReceiver : MonoBehaviour
         while (_queue.TryDequeue(out var payload))
         {
             try { OnResult?.Invoke(payload); }
-            catch (Exception e) { Debug.LogError($"[VlmResultReceiver] OnResult subscriber threw: {e}"); }
+            catch (Exception e) { Debug.LogError($"[Study Log][VlmResultReceiver] OnResult subscriber threw: {e}"); }
         }
     }
 
@@ -95,7 +90,7 @@ public class VlmResultReceiver : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"[VlmResultReceiver] bind UDP {port} failed: {e.Message}");
+            Debug.LogError($"[Study Log][VlmResultReceiver] bind UDP {port} failed: {e.Message}");
             _client = null;
             return;
         }
@@ -103,7 +98,7 @@ public class VlmResultReceiver : MonoBehaviour
         _running = true;
         _listenerThread = new Thread(ListenLoop) { IsBackground = true, Name = "VlmResultReceiver" };
         _listenerThread.Start();
-        Debug.Log($"[VlmResultReceiver] listening on UDP {port} for {PACKET_PREFIX}");
+        Debug.Log($"[Study Log][VlmResultReceiver] listening on UDP {port} for {PACKET_PREFIX}");
     }
 
     void StopListening()
@@ -126,13 +121,13 @@ public class VlmResultReceiver : MonoBehaviour
             try { data = _client.Receive(ref anyEp); }
             catch (SocketException) { break; }
             catch (ObjectDisposedException) { break; }
-            catch (Exception e) { Debug.LogWarning($"[VlmResultReceiver] receive: {e.Message}"); continue; }
+            catch (Exception e) { Debug.LogWarning($"[Study Log][VlmResultReceiver] receive: {e.Message}"); continue; }
 
             if (data == null || data.Length == 0) continue;
 
             string text;
             try { text = Encoding.UTF8.GetString(data); }
-            catch (Exception e) { Debug.LogWarning($"[VlmResultReceiver] decode: {e.Message}"); continue; }
+            catch (Exception e) { Debug.LogWarning($"[Study Log][VlmResultReceiver] decode: {e.Message}"); continue; }
 
             int sep = text.IndexOf('|');
             if (sep <= 0) continue;
@@ -141,13 +136,13 @@ public class VlmResultReceiver : MonoBehaviour
             string body = text.Substring(sep + 1);
             VlmResultPayload payload;
             try { payload = JsonUtility.FromJson<VlmResultPayload>(body); }
-            catch (Exception e) { Debug.LogWarning($"[VlmResultReceiver] json: {e.Message}"); continue; }
+            catch (Exception e) { Debug.LogWarning($"[Study Log][VlmResultReceiver] json: {e.Message}"); continue; }
             if (payload == null) continue;
 
             _queue.Enqueue(payload);
             if (verboseLogging)
             {
-                Debug.Log($"[VlmResultReceiver] received gesture={payload.gesture} name={payload.response?.name}");
+                Debug.Log($"[Study Log][VlmResultReceiver] received gesture={payload.gesture} name={payload.response?.name}");
             }
         }
     }

@@ -9,7 +9,7 @@ that produce a card -- not just Search/Find Info.
 
 Responsibilities:
 
-  1) On every gesture END from PinchPoseGestureCapture, snapshot the user's
+  1) On every gesture END from PinchPosegestureRouter, snapshot the user's
      gaze world position. The card spawn position is THIS snapshot + a fixed
      right-and-up offset, so cards always appear where the user was looking
      plus a bit upper-right, never moving once placed.
@@ -32,7 +32,7 @@ public class ResultCardSpawner : MonoBehaviour
 {
     [Header("Refs")]
     public VlmResultReceiver receiver;
-    public PinchPoseGestureCapture gestureCapture;
+    public GestureRouter gestureRouter;
     public EyeGazeReader eyeGazeReader;
     public MsgSender msgSender;
     public Camera referenceCamera;
@@ -67,13 +67,13 @@ public class ResultCardSpawner : MonoBehaviour
     void OnEnable()
     {
         if (receiver != null) receiver.OnResult += HandleResult;
-        if (gestureCapture != null) gestureCapture.OnCaptureRecognized += HandleGestureRecognized;
+        if (gestureRouter != null) gestureRouter.OnCaptureRecognized += HandleGestureRecognized;
     }
 
     void OnDisable()
     {
         if (receiver != null) receiver.OnResult -= HandleResult;
-        if (gestureCapture != null) gestureCapture.OnCaptureRecognized -= HandleGestureRecognized;
+        if (gestureRouter != null) gestureRouter.OnCaptureRecognized -= HandleGestureRecognized;
     }
 
     // ---------- gaze snapshot at gesture END ----------

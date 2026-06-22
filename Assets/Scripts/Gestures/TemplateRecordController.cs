@@ -5,19 +5,14 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /*
-TemplateRecordController
-
 Drives the template recording UI in TemplateRecordScene:
-  - Reads the selected referent label from a TMP_Dropdown.
-  - On "Start Recording" click, runs a coroutine that:
-      1) shows a 3-2-1 countdown on statusText
-      2) captures hand-pose feature frames for `recordingSeconds`
-      3) hands the captured frames to JackknifeUnifiedRecognizer.AppendTemplate
-      4) updates statusText / countText with the result
-  - Disables the Start button while busy so double-presses are ignored.
-
-The countdown values, recording duration, and frame interval are inspector-tunable
-so the same prefab can be reused for quick/slow/long-recording variants.
+    - Reads the selected referent label.
+    - On "Start Recording" click, runs a coroutine that:
+        1) shows a 3-2-1 countdown on statusText
+        2) captures hand-pose feature frames for `recordingSeconds`
+        3) hands the captured frames to JackknifeUnifiedRecognizer.AppendTemplate
+        4) updates statusText / countText with the result
+    - Disables the Start button while busy so double-presses are ignored.
 */
 
 public class TemplateRecordController : MonoBehaviour
@@ -33,16 +28,11 @@ public class TemplateRecordController : MonoBehaviour
     public JackknifeUnifiedRecognizer recognizer;
 
     [Header("Timing")]
-    [Tooltip("Number of one-second countdown beats before recording starts.")]
     [Range(0, 10)] public int countdownSeconds = 3;
-    [Tooltip("How long the actual capture window lasts.")]
     public float recordingSeconds = 2.0f;
-    [Tooltip("Minimum interval between feature samples during recording.")]
     public float minFrameInterval = 0.03f;
-    [Tooltip("How long the 'Saved!' message stays before resetting to Ready.")]
     public float postSaveSeconds = 1.2f;
-    [Tooltip("Short pause between 'GO!' and the actual recording start.")]
-    public float goHoldSeconds = 0.3f;
+    public float goHoldSeconds = 0.2f;
 
     [Header("Status colors")]
     public Color readyColor = new Color(0.78f, 0.78f, 0.85f);
@@ -52,9 +42,7 @@ public class TemplateRecordController : MonoBehaviour
     public Color errorColor = new Color(1.0f, 0.5f, 0.4f);
 
     [Header("Status font sizes")]
-    [Tooltip("Font size used for short numeric / single-word states (countdown digits, GO!, Saved!).")]
     public float bigFontSize = 96f;
-    [Tooltip("Font size for longer messages (Ready, Recording..., errors).")]
     public float smallFontSize = 40f;
 
     private bool _busy;
@@ -78,7 +66,7 @@ public class TemplateRecordController : MonoBehaviour
         if (featureSource == null || recognizer == null)
         {
             SetStatus("REFS MISSING", errorColor, smallFontSize);
-            Debug.LogError("[TemplateRecord] featureSource or recognizer not assigned.");
+            Debug.LogError("[JackknifeRecorder] featureSource or recognizer not assigned.");
             return;
         }
         StartCoroutine(RecordRoutine());
@@ -90,7 +78,7 @@ public class TemplateRecordController : MonoBehaviour
         if (startButton != null) startButton.interactable = false;
 
         string label = ReadSelectedLabel();
-        Debug.Log($"[TemplateRecord] Begin: label='{label}', countdown={countdownSeconds}s, record={recordingSeconds}s");
+        Debug.Log($"[JackknifeRecorder] START RECORDING: label='{label}'");
 
         for (int i = countdownSeconds; i > 0; i--)
         {
@@ -116,7 +104,7 @@ public class TemplateRecordController : MonoBehaviour
             yield return null;
         }
 
-        Debug.Log($"[TemplateRecord] Captured {_frames.Count} frames for label='{label}'");
+        Debug.Log($"[JackknifeRecorder] END RECORDING: Captured {_frames.Count} frames for label='{label}'");
 
         if (_frames.Count < 2)
         {
@@ -140,11 +128,11 @@ public class TemplateRecordController : MonoBehaviour
         if (referentDropdown == null || referentDropdown.options == null
             || referentDropdown.options.Count == 0)
         {
-            Debug.LogWarning("[TemplateRecord] dropdown empty; defaulting to 'Translate'.");
-            return "Translate";
+            Debug.LogWarning("[JackknifeRecorder] dropdown empty; defaulting to 'False'.");
+            return "False";
         }
         int idx = referentDropdown.value;
-        if (idx < 0 || idx >= referentDropdown.options.Count) return "Translate";
+        if (idx < 0 || idx >= referentDropdown.options.Count) return "False";
         return referentDropdown.options[idx].text;
     }
 

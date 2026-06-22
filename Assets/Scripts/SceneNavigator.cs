@@ -1,19 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-/*
-SceneNavigator
-
-Tiny helper used by UI Buttons to switch scenes. Wire a button's OnClick to
-one of these methods in the Inspector.
-
-  - LoadSceneByName(string)  : load by scene asset name (must be in Build Settings)
-  - LoadSceneByIndex(int)    : load by Build Settings index
-  - LoadNextScene()          : Build index + 1
-  - LoadPreviousScene()      : Build index - 1
-  - ReloadCurrentScene()     : reload self
-*/
-
 public class SceneNavigator : MonoBehaviour
 {
     public void LoadSceneByName(string sceneName)
