@@ -329,7 +329,7 @@ public class TranslateRegionCapture : MonoBehaviour
     {
         if (msgSender == null) return;
 
-        var payload = new CircleGestureRecognizer.CircleGesturePayload
+        var payload = new GestureEventPayload
         {
             gestureName = gestureName,
             eventType = eventType,

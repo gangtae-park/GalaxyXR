@@ -7,17 +7,10 @@ using UnityEngine.InputSystem;
 
 public class MsgSender : MonoBehaviour
 {
-    [Serializable]
-    public class GestureSignalPayload
-    {
-        public string gestureName;
-        public string eventType;
-    }
-
     public static MsgSender Instance { get; private set; }
 
     [Header("Network")]
-    public string serverIP = "192.168.0.0";
+    public string serverIP = "192.168.0.8";
     public int port = 5005;
 
     [Header("Assign from Input Actions")]
@@ -109,25 +102,7 @@ public class MsgSender : MonoBehaviour
         SendPacket(msg);
     }
 
-    public void SendCircleGesture(CircleGestureRecognizer.CircleGesturePayload payload)
-    {
-        if (payload == null)
-        {
-            Debug.LogWarning("[SENDER] SendCircleGesture called with null payload.");
-            return;
-        }
-
-        SendGesturePacket(
-            payload.gestureName
-        );
-    }
-
-    public void SendGestureSignal(CircleGestureRecognizer.CircleGesturePayload payload)
-    {
-        SendCircleGesture(payload);
-    }
-
-    public void SendGestureEvent(CircleGestureRecognizer.CircleGesturePayload payload)
+    public void SendGestureEvent(GestureEventPayload payload)
     {
         if (payload == null)
         {
