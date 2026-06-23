@@ -37,6 +37,14 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
     public string subDirectory = "GestureTemplates";
     public string saveFileName = "gesture_templates_unified.json";
 
+    [Header("Bundled template bootstrap")]
+    [Tooltip("Copies a bundled Resources template file into persistentDataPath when the runtime template file is missing or empty.")]
+    public bool bootstrapFromResourcesIfMissing = true;
+    [Tooltip("Resources path without extension, for example GestureTemplates/gesture_templates_unified.")]
+    public string resourcesTemplatePath = "GestureTemplates/gesture_templates_unified";
+    [Tooltip("Force-copy the bundled file over the persistent template file on startup. Leave off during recording sessions.")]
+    public bool overwritePersistentWithBundledTemplates = false;
+
     [Header("Jackknife params")]
     public int resampleCount = 32;
     public int radius = 1;
@@ -91,6 +99,7 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
     void Awake()
     {
         ResolvePath();
+        BootstrapTemplatesFromResourcesIfNeeded();
         Rebuild();
     }
 
@@ -99,6 +108,38 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         string dir = Application.persistentDataPath;
         if (!string.IsNullOrEmpty(subDirectory)) dir = Path.Combine(dir, subDirectory);
         _saveFilePath = Path.Combine(dir, saveFileName);
+    }
+
+    void BootstrapTemplatesFromResourcesIfNeeded()
+    {
+        if (!bootstrapFromResourcesIfMissing) return;
+
+        bool shouldCopy = overwritePersistentWithBundledTemplates || !File.Exists(_saveFilePath);
+        if (!shouldCopy)
+        {
+            TemplateFile existing = LoadFile();
+            shouldCopy = existing.templates == null || existing.templates.Count == 0;
+        }
+        if (!shouldCopy) return;
+
+        TextAsset bundled = Resources.Load<TextAsset>(resourcesTemplatePath);
+        if (bundled == null)
+        {
+            Debug.LogWarning($"[JackknifeUnified] bundled template not found at Resources/{resourcesTemplatePath}.json");
+            return;
+        }
+
+        try
+        {
+            string dir = Path.GetDirectoryName(_saveFilePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(_saveFilePath, bundled.text);
+            Debug.Log($"[JackknifeUnified] bootstrapped templates from Resources/{resourcesTemplatePath}.json to {_saveFilePath}");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"[JackknifeUnified] template bootstrap failed at '{_saveFilePath}': {e}");
+        }
     }
 
     [ContextMenu("Rebuild From Disk")]

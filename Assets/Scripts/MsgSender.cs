@@ -124,22 +124,32 @@ public class MsgSender : MonoBehaviour
 
     public void SendAskQuestion(string question)
     {
-        if (string.IsNullOrWhiteSpace(question))
+        SendTextPacket("ASK_QUESTION", question, "ASK_QUESTION");
+    }
+
+    public void SendVoiceTranscriptToLlm(string transcript)
+    {
+        SendTextPacket("ASK_QUESTION", transcript, "voice transcript to LLM");
+    }
+
+    void SendTextPacket(string packetType, string text, string logLabel)
+    {
+        if (string.IsNullOrWhiteSpace(text))
         {
-            Debug.LogWarning("[SENDER] SendAskQuestion called with empty question.");
+            Debug.LogWarning($"[SENDER] {logLabel} called with empty text.");
             return;
         }
 
-        string safe = question.Replace("\r", " ").Replace("\n", " ");
+        string safe = text.Replace("\r", " ").Replace("\n", " ");
 
         string msg = string.Join(",",
-            "ASK_QUESTION",
+            packetType,
             seq.ToString(CultureInfo.InvariantCulture),
             Time.unscaledTime.ToString("F4", CultureInfo.InvariantCulture),
             safe
         );
 
-        Debug.Log($"[SENDER] Sending ASK_QUESTION: {msg}");
+        Debug.Log($"[SENDER] Sending {logLabel}: {msg}");
 
         seq++;
         SendPacket(msg);

@@ -21,6 +21,7 @@ Responsibilities:
                               user's voice-question via card.OnQuestionSubmitted;
                               pass the captured question to MsgSender.SendAskQuestion
        "Ask"  + with answer-> destroy any AskQuestionCard, spawn AskResultCard
+       "VoiceAsk"         -> treated as "Ask" for compatibility with voice-side servers
                               with (name, question, answer)
        (other gestures)    -> hook later (Translate, Compare, ...)
 
@@ -80,10 +81,15 @@ public class ResultCardSpawner : MonoBehaviour
 
     void HandleGestureRecognized(string gestureName)
     {
+        CaptureCurrentGazeSnapshot($"gesture END '{gestureName}'");
+    }
+
+    public void CaptureCurrentGazeSnapshot(string reason)
+    {
         _lastGazeWorldPos = ComputeGazeWorldPosition();
         _haveGazeSnapshot = true;
         if (verboseLogging)
-            Debug.Log($"[ResultCardSpawner] gesture END '{gestureName}' -> gaze snapshot {_lastGazeWorldPos}");
+            Debug.Log($"[ResultCardSpawner] {reason} -> gaze snapshot {_lastGazeWorldPos}");
     }
 
     Vector3 ComputeGazeWorldPosition()
@@ -127,6 +133,10 @@ public class ResultCardSpawner : MonoBehaviour
                 break;
 
             case "Ask":
+                DispatchAsk(payload);
+                break;
+
+            case "VoiceAsk":
                 DispatchAsk(payload);
                 break;
 

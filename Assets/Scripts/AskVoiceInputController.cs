@@ -5,8 +5,13 @@ using UnityEngine.Networking;
 /*
 AskVoiceInputController
 
+Legacy/fallback controller.
+
 Captures the user's spoken question while an AskQuestionCard is active and
 POSTs the raw WAV audio to MacProgram. STT + GPT happen on the Python side.
+The default voice input flow now uses Android SpeechRecognizer and transcript
+text, so allowLegacyRecording stays false unless this fallback is explicitly
+re-enabled for comparison testing.
 
 Lifecycle:
 
@@ -34,6 +39,10 @@ your AndroidManifest declares it.
 
 public class AskVoiceInputController : MonoBehaviour
 {
+    [Header("Legacy / fallback")]
+    [Tooltip("Keep false for the Android STT transcript flow. Turn on only when intentionally testing the old WAV upload path.")]
+    public bool allowLegacyRecording = false;
+
     [Header("Refs")]
     public ResultCardSpawner spawner;
 
@@ -63,9 +72,26 @@ public class AskVoiceInputController : MonoBehaviour
     private string _micDevice;
     private float _recordStartTime;
     private float _lastVoiceTime;
+    private bool _loggedLegacyDisabled;
+
+    void Start()
+    {
+        if (!allowLegacyRecording)
+            Debug.Log("[AskVoice] Legacy WAV recorder is disabled. Android STT voice input should provide transcripts instead.");
+    }
 
     void Update()
     {
+        if (!allowLegacyRecording)
+        {
+            if (!_loggedLegacyDisabled)
+            {
+                _loggedLegacyDisabled = true;
+                Debug.Log("[AskVoice] Legacy recording skipped because allowLegacyRecording=false.");
+            }
+            return;
+        }
+
         AskQuestionCard current = spawner != null ? spawner.PendingAskQuestion : null;
 
         if (current != _activeCard)
