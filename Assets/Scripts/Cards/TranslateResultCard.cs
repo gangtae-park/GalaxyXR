@@ -2,10 +2,18 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class SearchResultCard : MonoBehaviour
+/*
+TranslateResultCard
+
+Card prefab component for the Translate referent. Same lifetime semantics as
+SearchResultCard / AskResultCard (30-second auto-destroy that keeps ticking
+regardless of grab / move, plus a Close button that destroys immediately) but
+with a single body text field for the Korean translation -- no title.
+*/
+
+public class TranslateResultCard : MonoBehaviour
 {
     [Header("UI")]
-    public TMP_Text titleText;
     public TMP_Text bodyText;
     public Button closeButton;
 
@@ -30,12 +38,12 @@ public class SearchResultCard : MonoBehaviour
         if (Time.time >= _destroyAt) Destroy(gameObject);
     }
 
-    public void SetContent(string displayName, string resultSearch)
+    public void SetContent(string koreanTranslation)
     {
-        if (titleText != null)
-            titleText.text = string.IsNullOrEmpty(displayName) ? "Unknown" : displayName;
         if (bodyText != null)
-            bodyText.text = string.IsNullOrEmpty(resultSearch) ? "(no result)" : resultSearch;
+            bodyText.text = string.IsNullOrEmpty(koreanTranslation)
+                ? "(no translation)"
+                : koreanTranslation;
     }
 
     public void Close()

@@ -2,20 +2,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-/*
-AskResultCard
-
-Spawned when the Ask gesture's second VLM result (the actual answer) arrives.
-Mirrors SearchResultCard's lifetime semantics: 30-second auto-destroy timer
-that keeps ticking regardless of grab / move, and a Close button that destroys
-immediately.
-
-Three text fields:
-  TitleText    = recognized object name
-  QuestionText = user's question (typically from payload.target_meta.user_question)
-  AnswerText   = VLM's answer
-*/
-
 public class AskResultCard : MonoBehaviour
 {
     [Header("UI")]
