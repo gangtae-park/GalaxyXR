@@ -41,6 +41,7 @@ public class ResultCardSpawner : MonoBehaviour
     public GameObject searchResultCardPrefab;
     public GameObject askQuestionCardPrefab;
     public GameObject askResultCardPrefab;
+    public GameObject translateResultCardPrefab;
 
     [Header("Spawn position (relative to gaze)")]
     [Tooltip("Distance from the camera along the gaze direction where the card 'anchor' lands.")]
@@ -130,11 +131,35 @@ public class ResultCardSpawner : MonoBehaviour
                 DispatchAsk(payload);
                 break;
 
+            case "Translate":
+                SpawnTranslateResult(payload);
+                break;
+
             default:
                 if (verboseLogging)
                     Debug.Log($"[ResultCardSpawner] gesture '{gesture}' has no card handler yet.");
                 break;
         }
+    }
+
+    // ---------- Translate ----------
+
+    void SpawnTranslateResult(VlmResultReceiver.VlmResultPayload payload)
+    {
+        if (translateResultCardPrefab == null)
+        {
+            Debug.LogWarning("[ResultCardSpawner] translateResultCardPrefab not assigned.");
+            return;
+        }
+        ReplaceCurrentCard();
+
+        GameObject go = Instantiate(translateResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+        var card = go.GetComponent<TranslateResultCard>();
+        if (card != null)
+            card.SetContent(payload.response.translation);
+        _currentCard = go;
+        if (verboseLogging)
+            Debug.Log($"[ResultCardSpawner] spawned TranslateResultCard translation='{payload.response.translation}'");
     }
 
     // ---------- Search ----------

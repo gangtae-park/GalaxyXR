@@ -155,6 +155,8 @@ public class MsgSender : MonoBehaviour
 
         byte[] data = Encoding.UTF8.GetBytes(msg);
         client.Send(data, data.Length, serverIP, port);
-        Debug.Log($"[Study Log][SENDER] Packet sent to {serverIP}:{port} | {msg}");
+
+        if (!msg.StartsWith("GAZE,"))
+            Debug.Log($"[Study Log][SENDER] Packet sent to {serverIP}:{port} | {msg}");
     }
 }
