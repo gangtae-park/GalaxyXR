@@ -3,8 +3,6 @@ using UnityEngine;
 using UnityEngine.Networking;
 
 /*
-AskVoiceInputController
-
 Legacy/fallback controller.
 
 Captures the user's spoken question while an AskQuestionCard is active and
@@ -15,7 +13,7 @@ re-enabled for comparison testing.
 
 Lifecycle:
 
-  1) Watches SearchResultCardSpawner.PendingAskQuestion. When it transitions
+  1) Watches ResultCardSpawner.PendingAskQuestion. When it transitions
      from null -> non-null (i.e. an AskQuestionCard was just spawned), starts
      a microphone recording.
 
@@ -47,18 +45,14 @@ public class AskVoiceInputController : MonoBehaviour
     public ResultCardSpawner spawner;
 
     [Header("Network")]
-    [Tooltip("URL of the MacProgram voice endpoint. The body is raw audio/wav bytes.")]
     public string voiceServerUrl = "http://192.168.0.8:5007/ask_voice";
 
     [Header("Microphone")]
     public int sampleRate = 16000;
-    [Tooltip("Hard cap on a single recording's duration.")]
-    public int maxRecordingSeconds = 15;
+    public int maxRecordingSeconds = 10;
 
     [Header("Silence detection")]
-    [Tooltip("RMS amplitude below this is treated as silence.")]
     public float silenceThreshold = 0.012f;
-    [Tooltip("After voice has been detected, stop recording when silence persists this long.")]
     public float silenceHoldSeconds = 1.5f;
 
     [Header("Status (read-only)")]
@@ -113,14 +107,14 @@ public class AskVoiceInputController : MonoBehaviour
     {
         if (Microphone.devices == null || Microphone.devices.Length == 0)
         {
-            Debug.LogError("[AskVoice] no microphone device available.");
+            Debug.LogError("[Study Log][AskVoice] no microphone device available.");
             return;
         }
         _micDevice = Microphone.devices[0];
         _recordingClip = Microphone.Start(_micDevice, false, maxRecordingSeconds, sampleRate);
         if (_recordingClip == null)
         {
-            Debug.LogError($"[AskVoice] Microphone.Start failed on '{_micDevice}'.");
+            Debug.LogError($"[Study Log][AskVoice] Microphone.Start failed on '{_micDevice}'.");
             return;
         }
         _recordStartTime = Time.time;
@@ -128,7 +122,7 @@ public class AskVoiceInputController : MonoBehaviour
         hasDetectedVoice = false;
         isRecording = true;
         recordedSeconds = 0f;
-        Debug.Log($"[AskVoice] recording started on '{_micDevice}' @ {sampleRate}Hz");
+        Debug.Log($"[Study Log][AskVoice] START RECORDING: recording started on '{_micDevice}' @ {sampleRate}Hz");
     }
 
     void MonitorRecording()
@@ -148,8 +142,8 @@ public class AskVoiceInputController : MonoBehaviour
         {
             if (maxReached)
             {
-                Debug.LogWarning("[AskVoice] no voice within max window; discarding.");
-                CancelRecording("no voice");
+                Debug.LogWarning("[Study Log][AskVoice] no voice within max window; discarding.");
+                CancelRecording("no voice input");
             }
             return;
         }
@@ -180,11 +174,11 @@ public class AskVoiceInputController : MonoBehaviour
         int finalPos = Microphone.GetPosition(_micDevice);
         Microphone.End(_micDevice);
         isRecording = false;
-        Debug.Log($"[AskVoice] recording STOPPED ({reason}) @ {finalPos} samples ({recordedSeconds:F2}s)");
+        Debug.Log($"[Study Log][AskVoice] STOP RECORDING: recording stopped ({reason}) @ {finalPos} samples ({recordedSeconds:F2}s)");
 
         if (finalPos <= 0 || _recordingClip == null)
         {
-            Debug.LogWarning("[AskVoice] no captured samples; nothing to send.");
+            Debug.LogWarning("[Study Log][AskVoice] no captured samples; nothing to send.");
             return;
         }
 
@@ -193,7 +187,7 @@ public class AskVoiceInputController : MonoBehaviour
         _recordingClip.GetData(samples, 0);
 
         byte[] wav = EncodeWav(samples, sampleRate, channels);
-        Debug.Log($"[AskVoice] encoded {wav.Length} WAV bytes");
+        Debug.Log($"[Study Log][AskVoice] encoded {wav.Length} WAV bytes");
 
         if (_activeCard != null) _activeCard.NotifyThinking();
 
@@ -220,15 +214,14 @@ public class AskVoiceInputController : MonoBehaviour
         yield return request.SendWebRequest();
 
         if (request.result == UnityWebRequest.Result.Success)
-            Debug.Log($"[AskVoice] POST OK code={request.responseCode} body={request.downloadHandler.text}");
+            Debug.Log($"[Study Log][AskVoice] POST SUCCESS: code={request.responseCode} body={request.downloadHandler.text}");
         else
-            Debug.LogError($"[AskVoice] POST failed: {request.error} ({request.result})");
+            Debug.LogError($"[Study Log][AskVoice] POST FAILED: {request.error} ({request.result})");
 
         request.Dispose();
     }
 
-    // ---- PCM-16 WAV encoder ----
-
+    // ========= PCM-16 WAV encoder =========
     static byte[] EncodeWav(float[] samples, int sampleRate, int channels)
     {
         const int headerSize = 44;

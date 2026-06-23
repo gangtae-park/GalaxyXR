@@ -1,6 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
   <uses-permission android:name="android.permission.EYE_TRACKING_FINE" />
+  <uses-permission android:name="android.permission.EYE_TRACKING" />
+  <uses-permission android:name="android.permission.HAND_TRACKING" />
   <uses-permission android:name="android.permission.SCENE_UNDERSTANDING_FINE" />
   <uses-permission android:name="android.permission.CAMERA" />
   <uses-permission android:name="android.permission.RECORD_AUDIO" />

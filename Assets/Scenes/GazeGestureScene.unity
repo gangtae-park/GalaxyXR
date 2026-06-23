@@ -654,7 +654,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8969d887d76546dbb0cf51ed4f3d7fbc, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PinchPoseGestureCapture
+  m_EditorClassIdentifier: Assembly-CSharp::GestureRouter
   pinchAction: {fileID: 187161793506945269, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   pinchValueThreshold: 0.9
   featureSource: {fileID: 136429832}
@@ -4143,8 +4143,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 24
-  m_fontSizeBase: 24
+  m_fontSize: 18
+  m_fontSizeBase: 18
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -6782,16 +6782,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SearchResultCardSpawner
   receiver: {fileID: 1110963238}
-  gestureCapture: {fileID: 136429830}
+  gestureRouter: {fileID: 136429830}
   eyeGazeReader: {fileID: 198504609}
   msgSender: {fileID: 1110963236}
   referenceCamera: {fileID: 1948693200}
   searchResultCardPrefab: {fileID: 2818028396226705512, guid: 48871991c54c847bcb79c10583059d42, type: 3}
   askQuestionCardPrefab: {fileID: 2818028396226705512, guid: d5506294734264ebfb2ada9f4b4134c8, type: 3}
   askResultCardPrefab: {fileID: 2818028396226705512, guid: adb722f35143547609b2e5366750e847, type: 3}
+  translateResultCardPrefab: {fileID: 2818028396226705512, guid: c21f37f7d63cd4a8ca61d2cc3eba682a, type: 3}
   gazeProjectionDistance: 0.8
-  horizontalOffset: 0.3
-  verticalOffset: 0.3
+  horizontalOffset: 0.12
+  verticalOffset: 0.12
   replacePreviousCard: 1
   verboseLogging: 1
 --- !u!114 &1110963238
@@ -7027,7 +7028,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 50}
+  m_SizeDelta: {x: 0, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1135373871
 MonoBehaviour:
@@ -8937,7 +8938,7 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 3293653894479941015, guid: faf53399145e13c4b992b14c97b5f4c0, type: 3}
   m_PrefabInstance: {fileID: 3293653893799755237}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &1537315873
+--- !u!114 &1537315876
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -8946,9 +8947,15 @@ MonoBehaviour:
   m_GameObject: {fileID: 1537315870}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0600f4530d72547399a405c3f3543c40, type: 3}
+  m_Script: {fileID: 11500000, guid: 72dfb5dff87a47f0b78505ca8755e43c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EyeTrackingPermissionRequester
+  m_EditorClassIdentifier: Assembly-CSharp::XRPermissionsRequester
+  permissions:
+  - android.permission.EYE_TRACKING
+  - android.permission.EYE_TRACKING_FINE
+  - android.permission.HAND_TRACKING
+  - android.permission.RECORD_AUDIO
+  verboseLogging: 1
 --- !u!1001 &1542318347
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -9317,8 +9324,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 24
-  m_fontSizeBase: 24
+  m_fontSize: 18
+  m_fontSizeBase: 18
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -10262,6 +10269,41 @@ RectTransform:
   m_AnchoredPosition: {x: -0, y: -20}
   m_SizeDelta: {x: -300, y: -500}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &1738594814
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1738594815}
+  m_Layer: 5
+  m_Name: EmptyRow
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1738594815
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1738594814}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1752735181}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 20}
+  m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1740401300
 GameObject:
   m_ObjectHideFlags: 0
@@ -10450,6 +10492,7 @@ RectTransform:
   - {fileID: 933527653}
   - {fileID: 2008012822}
   - {fileID: 1675155606}
+  - {fileID: 1738594815}
   - {fileID: 1135373870}
   m_Father: {fileID: 356742521}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -12825,13 +12868,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: Permissions Manager
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 3293653894479941014, guid: faf53399145e13c4b992b14c97b5f4c0, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 3293653894479941015, guid: faf53399145e13c4b992b14c97b5f4c0, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 1537315873}
+      addedObject: {fileID: 1537315876}
   m_SourcePrefab: {fileID: 100100000, guid: faf53399145e13c4b992b14c97b5f4c0, type: 3}
 --- !u!1001 &4330884014604818162
 PrefabInstance:
@@ -14212,8 +14256,6 @@ GameObject:
   - component: {fileID: 6614100000000000003}
   - component: {fileID: 6614100000000000004}
   - component: {fileID: 6614100000000000005}
-  - component: {fileID: 6614100000000000006}
-  - component: {fileID: 6614100000000000007}
   - component: {fileID: 6614100000000000008}
   - component: {fileID: 6614100000000000009}
   - component: {fileID: 6614100000000000010}
@@ -14323,42 +14365,6 @@ MonoBehaviour:
   recognitionAvailable: 0
   onDeviceRecognitionAvailable: 0
   isListening: 0
---- !u!114 &6614100000000000006
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6614100000000000000}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 77de79089ac7448aa83e8a06c636d916, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::VoiceCommandParser
-  verboseLogging: 1
---- !u!114 &6614100000000000007
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6614100000000000000}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ef2d9700d8b94341b9e01c573c883a11, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::SemanticCommandRouter
-  msgSender: {fileID: 1110963236}
-  resultCardSpawner: {fileID: 1110963237}
-  interactionLogger: {fileID: 6614100000000000004}
-  sendSyntheticStartEvent: 1
-  pendingGestureName: Pending
-  searchGestureName: Search/Find Info
-  askGestureName: Ask
-  captureGazeSnapshotForGazeVoice: 1
-  allowDirectAskWithoutPendingCard: 0
-  autoResolveReferences: 1
-  verboseLogging: 1
 --- !u!114 &6614100000000000008
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -258,7 +258,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AskQuestionCard
   titleText: {fileID: 5847218668785855992}
-  questionText: {fileID: 0}
   statusText: {fileID: 4624415077839662944}
   closeButton: {fileID: 8757062055185184750}
   listeningMessage: Listening...
@@ -707,8 +706,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: Ask Question about
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: e93778d2e35d745209fb1add045a36d2, type: 2}
-  m_sharedMaterial: {fileID: -7716551718228360391, guid: e93778d2e35d745209fb1add045a36d2, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}
+  m_sharedMaterial: {fileID: -8081388478298098407, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -732,13 +731,13 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 20
-  m_fontSizeBase: 20
+  m_fontSize: 18
+  m_fontSizeBase: 18
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 1
+  m_fontStyle: 0
   m_HorizontalAlignment: 1
   m_VerticalAlignment: 512
   m_textAlignment: 65535
@@ -771,7 +770,7 @@ MonoBehaviour:
   m_VertexBufferAutoSizeReduction: 0
   m_useMaxVisibleDescender: 1
   m_pageToDisplay: 1
-  m_margin: {x: 0, y: 0, z: 0, w: 0}
+  m_margin: {x: 0, y: 0, z: 62.70813, w: 0}
   m_isUsingLegacyAnimationComponent: 0
   m_isVolumetricText: 0
   m_hasFontAssetChanged: 0
@@ -831,9 +830,9 @@ RectTransform:
   m_LocalScale: {x: 0.001, y: 0.001, z: 0.001}
   m_ConstrainProportionsScale: 1
   m_Children:
-  - {fileID: 335631978148262551}
   - {fileID: 7891308951667627272}
   - {fileID: 5457208732642366895}
+  - {fileID: 335631978148262551}
   - {fileID: 1231689020279417946}
   m_Father: {fileID: 5064422091198990586}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -1280,8 +1279,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: '{name}'
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: e93778d2e35d745209fb1add045a36d2, type: 2}
-  m_sharedMaterial: {fileID: -7716551718228360391, guid: e93778d2e35d745209fb1add045a36d2, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}
+  m_sharedMaterial: {fileID: -8081388478298098407, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -1305,13 +1304,13 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 20
-  m_fontSizeBase: 20
+  m_fontSize: 18
+  m_fontSizeBase: 18
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 1
+  m_fontStyle: 0
   m_HorizontalAlignment: 1
   m_VerticalAlignment: 256
   m_textAlignment: 65535

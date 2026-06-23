@@ -9,7 +9,7 @@ that produce a card -- not just Search/Find Info.
 
 Responsibilities:
 
-  1) On every gesture END from PinchPoseGestureCapture, snapshot the user's
+  1) On every gesture END from GestureRouter, snapshot the user's
      gaze world position. The card spawn position is THIS snapshot + a fixed
      right-and-up offset, so cards always appear where the user was looking
      plus a bit upper-right, never moving once placed.
@@ -33,7 +33,7 @@ public class ResultCardSpawner : MonoBehaviour
 {
     [Header("Refs")]
     public VlmResultReceiver receiver;
-    public PinchPoseGestureCapture gestureCapture;
+    public GestureRouter gestureRouter;
     public EyeGazeReader eyeGazeReader;
     public MsgSender msgSender;
     public Camera referenceCamera;
@@ -42,6 +42,7 @@ public class ResultCardSpawner : MonoBehaviour
     public GameObject searchResultCardPrefab;
     public GameObject askQuestionCardPrefab;
     public GameObject askResultCardPrefab;
+    public GameObject translateResultCardPrefab;
 
     [Header("Spawn position (relative to gaze)")]
     [Tooltip("Distance from the camera along the gaze direction where the card 'anchor' lands.")]
@@ -68,13 +69,13 @@ public class ResultCardSpawner : MonoBehaviour
     void OnEnable()
     {
         if (receiver != null) receiver.OnResult += HandleResult;
-        if (gestureCapture != null) gestureCapture.OnCaptureRecognized += HandleGestureRecognized;
+        if (gestureRouter != null) gestureRouter.OnCaptureRecognized += HandleGestureRecognized;
     }
 
     void OnDisable()
     {
         if (receiver != null) receiver.OnResult -= HandleResult;
-        if (gestureCapture != null) gestureCapture.OnCaptureRecognized -= HandleGestureRecognized;
+        if (gestureRouter != null) gestureRouter.OnCaptureRecognized -= HandleGestureRecognized;
     }
 
     // ---------- gaze snapshot at gesture END ----------
@@ -140,11 +141,35 @@ public class ResultCardSpawner : MonoBehaviour
                 DispatchAsk(payload);
                 break;
 
+            case "Translate":
+                SpawnTranslateResult(payload);
+                break;
+
             default:
                 if (verboseLogging)
                     Debug.Log($"[ResultCardSpawner] gesture '{gesture}' has no card handler yet.");
                 break;
         }
+    }
+
+    // ---------- Translate ----------
+
+    void SpawnTranslateResult(VlmResultReceiver.VlmResultPayload payload)
+    {
+        if (translateResultCardPrefab == null)
+        {
+            Debug.LogWarning("[ResultCardSpawner] translateResultCardPrefab not assigned.");
+            return;
+        }
+        ReplaceCurrentCard();
+
+        GameObject go = Instantiate(translateResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+        var card = go.GetComponent<TranslateResultCard>();
+        if (card != null)
+            card.SetContent(payload.response.translation);
+        _currentCard = go;
+        if (verboseLogging)
+            Debug.Log($"[ResultCardSpawner] spawned TranslateResultCard translation='{payload.response.translation}'");
     }
 
     // ---------- Search ----------

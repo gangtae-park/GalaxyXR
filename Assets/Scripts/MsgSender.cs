@@ -66,7 +66,7 @@ public class MsgSender : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("[SENDER] EyeGazeReader not assigned.");
+            Debug.LogWarning("[Study Log][SENDER] EyeGazeReader not assigned.");
         }
 
         Camera referenceCamera = Camera.main;
@@ -74,7 +74,7 @@ public class MsgSender : MonoBehaviour
 
         if (referenceCamera == null)
         {
-            Debug.LogWarning("[SENDER] Camera.main is null.");
+            Debug.LogWarning("[Study Log][SENDER] Camera.main is null.");
         }
         else if (gazeDir.sqrMagnitude > 0f)
         {
@@ -101,7 +101,7 @@ public class MsgSender : MonoBehaviour
     {
         if (payload == null)
         {
-            Debug.LogWarning("[SENDER] SendGestureEvent called with null payload.");
+            Debug.LogWarning("[Study Log][SENDER] SendGestureEvent called with null payload.");
             return;
         }
 
@@ -116,7 +116,7 @@ public class MsgSender : MonoBehaviour
             safeEventType
         );
 
-        Debug.Log($"[SENDER] Sending gesture event packet: {msg}");
+        Debug.Log($"[Study Log][SENDER] Sending gesture event packet: {msg}");
 
         seq++;
         SendPacket(msg);
@@ -136,7 +136,7 @@ public class MsgSender : MonoBehaviour
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            Debug.LogWarning($"[SENDER] {logLabel} called with empty text.");
+            Debug.LogWarning($"[Study Log][SENDER] {logLabel} called with empty text.");
             return;
         }
 
@@ -149,7 +149,7 @@ public class MsgSender : MonoBehaviour
             safe
         );
 
-        Debug.Log($"[SENDER] Sending {logLabel}: {msg}");
+        Debug.Log($"[Study Log][SENDER] Sending {logLabel}: {msg}");
 
         seq++;
         SendPacket(msg);
@@ -159,12 +159,14 @@ public class MsgSender : MonoBehaviour
     {
         if (client == null)
         {
-            Debug.LogWarning("[SENDER] UDP client is null. Packet not sent.");
+            Debug.LogWarning("[Study Log][SENDER] UDP client is null. Packet not sent.");
             return;
         }
 
         byte[] data = Encoding.UTF8.GetBytes(msg);
         client.Send(data, data.Length, serverIP, port);
-        Debug.Log($"[SENDER] Packet sent to {serverIP}:{port} | {msg}");
+
+        if (!msg.StartsWith("GAZE,"))
+            Debug.Log($"[Study Log][SENDER] Packet sent to {serverIP}:{port} | {msg}");
     }
 }

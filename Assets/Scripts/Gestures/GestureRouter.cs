@@ -4,36 +4,19 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /*
-PinchPoseGestureCapture
-
 Single component that drives the unified gesture pipeline:
-
-  1) Watch the right-hand pinch action. The rising edge of "pinch pressed"
-     starts a capture window.
-  2) For exactly `captureSeconds` (default 2.0) after that edge, sample
-     HandFeatureSource at minFrameInterval into a buffer. The pinch state
-     during this window doesn't matter -- releasing the pinch does NOT stop
-     the capture. This lets a gesture like "open V then close pinch" be
-     captured as one trajectory.
-  3) At the end of the window, hand the buffer to JackknifeUnifiedRecognizer.
-        match("<class>") -> SendGestureEvent(name, END) + RECOGNIZED
-        reject           -> SendGestureEvent(Pending, END) + FAIL
-
-  4) Until the capture window ends, ignore further pinch edges. After the
-     window ends, a fresh pinch edge can start a new capture.
-
-UDP packets follow the same shape used by the rest of the pipeline so the
-Python side (network.py) sees a familiar START -> END+RECOGNIZED / FAIL flow
-and dispatches the appropriate handler.
-
-This component is self-contained: no GestureRouter dependency required.
+1) Watch the right-hand pinch action. The rising edge of "pinch pressed" starts a capture window.
+2) For exactly 'captureSeconds' after that edge, sample HandFeatureSource at minFrameInterval into a buffer.
+3) At the end of the window or every 'recognitionIntervalSeconds', hand the buffer to JackknifeUnifiedRecognizer.
+    match   -> SendGestureEvent(name, END) + RECOGNIZED
+    reject  -> SendGestureEvent(Pending, END) + FAIL
 */
 
-public class PinchPoseGestureCapture : MonoBehaviour
+public class GestureRouter : MonoBehaviour
 {
     [Header("Pinch trigger (right-hand)")]
     public InputActionReference pinchAction;
-    [Range(0f, 1f)] public float pinchValueThreshold = 0.7f;
+    [Range(0f, 1f)] public float pinchValueThreshold = 0.9f;
 
     [Header("References")]
     public HandFeatureSource featureSource;
@@ -44,9 +27,9 @@ public class PinchPoseGestureCapture : MonoBehaviour
     public float captureSeconds = 2.5f;
     public float minFrameInterval = 0.03f;
 
-    [Header("Recognition (periodic during the window)")]
+    [Header("Recognition")]
     public float recognitionIntervalSeconds = 0.2f;
-    public int minFramesForRecognition = 12;
+    public int minFramesForRecognition = 20;
 
     [Header("Routing")]
     public string pendingReferentName = "Pending";

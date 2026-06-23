@@ -69,17 +69,16 @@ public class EyeGazeReader : MonoBehaviour
             return;
         }
 
-        Debug.DrawRay(cam.position, gazeDir * debugRayLength, Color.red);
-
         if (marker != null)
         {
+            Debug.DrawRay(cam.position, gazeDir * debugRayLength, Color.red);
             marker.gameObject.SetActive(true);
             marker.position = cam.position + gazeDir * markerDistance;
         }
 
         if (logEveryNFrames > 0 && Time.frameCount % logEveryNFrames == 0)
         {
-            Debug.Log($"[GAZE] tracked={isTracked} gazeDir=({gazeDir.x:F3},{gazeDir.y:F3},{gazeDir.z:F3})");
+            Debug.Log($"[GAZE] tracked={isTracked}, gazeDir=({gazeDir.x:F3},{gazeDir.y:F3},{gazeDir.z:F3})");
         }
     }
 }
