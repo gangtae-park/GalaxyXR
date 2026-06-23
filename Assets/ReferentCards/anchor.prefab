@@ -64,6 +64,10 @@ PrefabInstance:
       propertyPath: m_ConstrainProportionsScale
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: -6442840951108381228, guid: 4706c7f7f63f44dc2a63e029a670baf4, type: 3}
+      propertyPath: m_Name
+      value: body
+      objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 4706c7f7f63f44dc2a63e029a670baf4, type: 3}
       propertyPath: m_Name
       value: anchor
@@ -93,4 +97,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b9979b6f0e424ab69999f1a0b7779a17, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AnchorPin
-  labelText: {fileID: 0}
+  holdToDeleteDuration: 2
+  shrinkWhileHolding: 1
+  shrinkRatio: 0.8
+  autoColliderSizeMultiplier: 1.2
+  darkenWhileHolding: 1
+  darkenFactor: 0.5
