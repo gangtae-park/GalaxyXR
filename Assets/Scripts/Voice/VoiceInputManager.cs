@@ -19,6 +19,10 @@ public class VoiceInputManager : MonoBehaviour
     public bool autoResolveReferences = true;
     public bool verboseLogging = true;
 
+    [Header("Backend packet")]
+    [Tooltip("VOICE_COMMAND tells the backend to pair this transcript with the current frame/object context.")]
+    public bool sendVoiceCommandPacket = true;
+
     [Header("Status")]
     [SerializeField] private bool waitingForFinalTranscript;
     [SerializeField] private string lastTranscript;
@@ -128,12 +132,15 @@ public class VoiceInputManager : MonoBehaviour
 
         if (msgSender == null)
         {
-            LogFailure("ASK_QUESTION", "MsgSender is not assigned.");
+            LogFailure("VOICE_COMMAND", "MsgSender is not assigned.");
             return;
         }
 
-        msgSender.SendVoiceTranscriptToLlm(rawTranscript);
-        LogSuccess("ASK_QUESTION", rawTranscript);
+        if (sendVoiceCommandPacket)
+        {
+            msgSender.SendVoiceCommand(rawTranscript);
+            LogSuccess("VOICE_COMMAND", rawTranscript);
+        }
     }
 
     static void LogUnicodeCodePoints(string prefix, string transcript)

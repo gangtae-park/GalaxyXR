@@ -16,8 +16,8 @@ public class InputModeDropdownBinder : MonoBehaviour
     public string voiceOnlyLabel = "Voice input";
 
     [Header("Voice test shortcut")]
-    [Tooltip("For the current test panel: selecting Voice immediately opens one STT listening window.")]
-    public bool startListeningWhenVoiceModeSelected = true;
+    [Tooltip("For manual testing only. Production voice mode waits for VoiceHandTrigger instead.")]
+    public bool startListeningWhenVoiceModeSelected = false;
 
     void Awake()
     {

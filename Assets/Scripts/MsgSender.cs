@@ -129,7 +129,12 @@ public class MsgSender : MonoBehaviour
 
     public void SendVoiceTranscriptToLlm(string transcript)
     {
-        SendTextPacket("ASK_QUESTION", transcript, "voice transcript to LLM");
+        SendVoiceCommand(transcript);
+    }
+
+    public void SendVoiceCommand(string transcript)
+    {
+        SendTextPacket("VOICE_COMMAND", transcript, "VOICE_COMMAND");
     }
 
     void SendTextPacket(string packetType, string text, string logLabel)
@@ -140,7 +145,7 @@ public class MsgSender : MonoBehaviour
             return;
         }
 
-        string safe = text.Replace("\r", " ").Replace("\n", " ");
+        string safe = text.Replace("\r", " ").Replace("\n", " ").Replace(",", " ");
 
         string msg = string.Join(",",
             packetType,

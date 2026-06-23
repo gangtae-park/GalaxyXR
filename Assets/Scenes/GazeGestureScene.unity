@@ -14260,6 +14260,7 @@ GameObject:
   - component: {fileID: 6614100000000000009}
   - component: {fileID: 6614100000000000010}
   - component: {fileID: 6614100000000000011}
+  - component: {fileID: 6614100000000000012}
   m_Layer: 0
   m_Name: InputModeManager
   m_TagString: Untagged
@@ -14301,6 +14302,7 @@ MonoBehaviour:
   voiceControllers:
   - {fileID: 6614100000000000005}
   - {fileID: 6614100000000000008}
+  - {fileID: 6614100000000000012}
   gazeControllers:
   - {fileID: 198504609}
   keepGazeEnabledInGestureOnly: 1
@@ -14385,6 +14387,7 @@ MonoBehaviour:
   listenTimeoutSeconds: 10
   autoResolveReferences: 1
   verboseLogging: 1
+  sendVoiceCommandPacket: 1
   waitingForFinalTranscript: 0
   lastTranscript:
 --- !u!114 &6614100000000000009
@@ -14452,7 +14455,29 @@ MonoBehaviour:
   gestureOnlyLabel: Gesture input
   uiInteractionLabel: UI Interaction
   voiceOnlyLabel: Voice input
-  startListeningWhenVoiceModeSelected: 1
+  startListeningWhenVoiceModeSelected: 0
+--- !u!114 &6614100000000000012
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6614100000000000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 432333aad5564efd8ad0591625f6bdfd, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::VoiceHandTrigger
+  voiceInputManager: {fileID: 6614100000000000008}
+  modeManager: {fileID: 6614100000000000002}
+  triggerAction: {fileID: 0}
+  triggerThreshold: 0.85
+  holdSeconds: 0.65
+  cooldownSeconds: 1.2
+  requireVoiceMode: 1
+  useFallbackLeftHandPinch: 1
+  verboseLogging: 1
+  holdTime: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
