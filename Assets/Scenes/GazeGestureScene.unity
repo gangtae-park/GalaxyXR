@@ -677,6 +677,10 @@ MonoBehaviour:
   poseEvalIntervalSeconds: 0.1
   saveGestureName: Save
   saveEntryHoldTimeoutSeconds: 2
+  captureGestureName: Capture
+  cameraHoldSeconds: 1.5
+  verboseCameraHoldLogging: 1
+  cameraHoldLogIntervalSeconds: 0.1
   capturing: 0
   captureElapsed: 0
   bufferFrameCount: 0
@@ -685,6 +689,10 @@ MonoBehaviour:
   compareReadyElapsed: 0
   handsDistance: -1
   savePending: 0
+  saveRearmRequired: 0
+  cameraPending: 0
+  cameraRearmRequired: 0
+  cameraHeldElapsed: 0
   lastPoseResult: 
 --- !u!114 &136429831
 MonoBehaviour:
@@ -770,6 +778,9 @@ MonoBehaviour:
   scribbleMinReversals: 3
   scribbleMinLateralTravel: 0.03
   scribbleJitterDeadband: 0.002
+  fingerCurledRatio: 0.7
+  thumbIndexPerpDot: 0.7
+  handsAntiParallelDot: -0.5
   lastResult: 0
   leftHandTracked: 0
   rightHandTracked: 0
@@ -778,6 +789,25 @@ MonoBehaviour:
   indexPalmDistance: -1
   scribbleReversals: 0
   scribbleLateralTravel: 0
+  cameraLeftLShape: 0
+  cameraRightLShape: 0
+  cameraThumbsDot: 1
+  cameraIndexesDot: 1
+  lThumb: 0
+  lIndex: 0
+  lMiddle: 0
+  lRing: 0
+  lLittle: 0
+  rThumb: 0
+  rIndex: 0
+  rMiddle: 0
+  rRing: 0
+  rLittle: 0
+  lThumbIndexDot: 1
+  rThumbIndexDot: 1
+  lLShapeReject: 
+  rLShapeReject: 
+  verboseLogging: 1
 --- !u!1 &152278406
 GameObject:
   m_ObjectHideFlags: 0
