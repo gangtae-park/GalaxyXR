@@ -45,6 +45,15 @@ public class GestureRouter : MonoBehaviour
     public float handsTogetherDistance = 0.03f;
     public bool requireBothPinchHeldToComplete = true;
 
+    [Header("Pose recognition (Save / Camera)")]
+    [Tooltip("Geometric pose recognizer for non-pinch referents. Optional.")]
+    public HandPoseRecognizer poseRecognizer;
+    [Tooltip("Seconds between hand-pose evaluations. ~0.1 = 10 Hz; the geometry check is cheap.")]
+    public float poseEvalIntervalSeconds = 0.1f;
+    public string saveGestureName = "Save";
+    [Tooltip("After the left palm-up pose is detected, cancel back to idle if no scribble input arrives within this many seconds. The timer refreshes whenever scribble samples are actively being accumulated, so a slow scribble is not interrupted.")]
+    public float saveEntryHoldTimeoutSeconds = 2f;
+
     [Header("Status (read-only)")]
     [SerializeField] private bool capturing;
     [SerializeField] private float captureElapsed;
@@ -53,6 +62,9 @@ public class GestureRouter : MonoBehaviour
     [SerializeField] private bool compareReady;
     [SerializeField] private float compareReadyElapsed;
     [SerializeField] private float handsDistance = -1f;
+    [SerializeField] private bool savePending;
+    [SerializeField] private bool saveRearmRequired;
+    [SerializeField] private string lastPoseResult = "";
 
     public bool IsCapturing => capturing;
     public bool IsCompareReady => compareReady;
@@ -69,6 +81,8 @@ public class GestureRouter : MonoBehaviour
     private float _lastSampleTime = -1f;
     private float _nextRecognitionTime;
     private float _compareReadyStartTime;
+    private float _nextPoseEvalTime;
+    private float _saveEntryDeadline;
     private readonly List<float[]> _frames = new List<float[]>(128);
 
     void OnEnable()
@@ -89,6 +103,8 @@ public class GestureRouter : MonoBehaviour
 
     void Update()
     {
+        EvaluatePoseRecognition();
+
         bool rightPressed = ReadPressed(pinchAction);
         bool leftPressed = ReadPressed(leftPinchAction);
 
@@ -99,8 +115,15 @@ public class GestureRouter : MonoBehaviour
         else
         {
             // Rising edge of the right pinch starts a capture if we're idle.
+            // If Save is pending (left palm held up, waiting for scribble), the user
+            // is choosing to do a Search/Ask/Translate/Anchor instead -- pre-empt Save
+            // so Python's gesture state is cleanly handed over, then open the Jackknife
+            // window. Save can re-arm automatically once the pinch flow finishes.
             if (rightPressed && !_wasPressed && !capturing)
+            {
+                if (savePending) PreemptSaveForPinch();
                 StartCapture();
+            }
 
             if (capturing)
             {
@@ -258,6 +281,113 @@ public class GestureRouter : MonoBehaviour
         Debug.Log($"[Study Log][GestureRouter] COMPARE cancelled ({reason}).");
         SendEvent(pendingReferentName, "END");
         SendEvent(pendingReferentName, "FAIL");
+        try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    // ====== Pose recognition (Save / Camera) ======
+    // Drives the HandPoseRecognizer at a fixed cadence and translates its result
+    // into GESTURE_EVENT packets:
+    //   idle    + SaveEntry -> Save START   (Python begins gaze logging)
+    //   pending + Save      -> Save END + RECOGNIZED
+    //   pending + None      -> Save FAIL    (palm pose broken)
+    // We skip evaluation entirely while pinch-driven flows are in flight so
+    // the two pipelines never compete for the same hand state.
+    void EvaluatePoseRecognition()
+    {
+        if (poseRecognizer == null) return;
+        if (capturing || compareReady) return;
+
+        float now = Time.time;
+        if (now < _nextPoseEvalTime) return;
+        _nextPoseEvalTime = now + Mathf.Max(0.02f, poseEvalIntervalSeconds);
+
+        HandPoseKind kind = HandPoseKind.None;
+        try { kind = poseRecognizer.Evaluate(); }
+        catch (Exception e) { Debug.LogError($"[GestureRouter] poseRecognizer.Evaluate threw: {e}"); }
+        lastPoseResult = kind.ToString();
+
+        switch (kind)
+        {
+            case HandPoseKind.SaveEntry:
+                if (!savePending)
+                {
+                    // Edge-triggered: after a previous Save (success or cancel) the user
+                    // must let the palm pose lapse (None / CameraPose) before another
+                    // Save can arm. Otherwise holding the palm up indefinitely would loop
+                    // START -> timeout FAIL -> START forever.
+                    if (!saveRearmRequired) EnterSavePending();
+                }
+                else
+                {
+                    // Refresh the deadline as long as scribble samples are actively
+                    // being accumulated (so a slow scribble isn't cancelled mid-motion).
+                    // Otherwise: palm is just being held open -- cancel after the timeout.
+                    if (poseRecognizer.CurrentScribbleSampleCount > 0)
+                        _saveEntryDeadline = Time.time + saveEntryHoldTimeoutSeconds;
+                    else if (Time.time >= _saveEntryDeadline)
+                        FinishSaveCancel($"no scribble within {saveEntryHoldTimeoutSeconds:F1}s");
+                }
+                break;
+            case HandPoseKind.Save:
+                if (!savePending)
+                {
+                    if (saveRearmRequired) break;
+                    EnterSavePending();
+                }
+                FinishSaveMatch();
+                break;
+            case HandPoseKind.CameraPose:
+                // Reserved -- the Capture gesture will be wired in here later.
+                if (savePending) FinishSaveCancel("pose changed to Camera");
+                saveRearmRequired = false;
+                break;
+            case HandPoseKind.None:
+            default:
+                if (savePending) FinishSaveCancel("palm pose lost");
+                saveRearmRequired = false;
+                break;
+        }
+    }
+
+    void EnterSavePending()
+    {
+        savePending = true;
+        lastRecognized = "";
+        _saveEntryDeadline = Time.time + saveEntryHoldTimeoutSeconds;
+        Debug.Log($"[GestureRouter] {saveGestureName} pending: left palm up. Scribble with the right index within {saveEntryHoldTimeoutSeconds:F1}s to confirm.");
+        SendEvent(saveGestureName, "START");
+        try { OnCaptureStarted?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    void FinishSaveMatch()
+    {
+        savePending = false;
+        saveRearmRequired = true;
+        lastRecognized = saveGestureName;
+        Debug.Log($"[GestureRouter] {saveGestureName} RECOGNIZED (scribble pattern detected).");
+        SendEvent(saveGestureName, "END");
+        SendEvent(saveGestureName, "RECOGNIZED");
+        try { OnCaptureRecognized?.Invoke(saveGestureName); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    void FinishSaveCancel(string reason)
+    {
+        savePending = false;
+        saveRearmRequired = true;
+        Debug.Log($"[GestureRouter] {saveGestureName} cancelled ({reason}). Re-arm requires the palm pose to lapse.");
+        SendEvent(saveGestureName, "FAIL");
+        try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    // Pre-empt a pending Save because the user just pinched (Search/Ask/etc.).
+    // Unlike FinishSaveCancel we deliberately leave saveRearmRequired = false so the
+    // Save flow re-arms automatically once the pinch capture finishes, without the
+    // user having to lower and re-raise the palm.
+    void PreemptSaveForPinch()
+    {
+        savePending = false;
+        Debug.Log($"[GestureRouter] {saveGestureName} pre-empted by right pinch (handing over to Jackknife). Will re-arm after capture.");
+        SendEvent(saveGestureName, "FAIL");
         try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
 

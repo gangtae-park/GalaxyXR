@@ -621,6 +621,7 @@ GameObject:
   - component: {fileID: 136429832}
   - component: {fileID: 136429831}
   - component: {fileID: 136429830}
+  - component: {fileID: 136429833}
   m_Layer: 0
   m_Name: GestureManager
   m_TagString: Untagged
@@ -672,6 +673,10 @@ MonoBehaviour:
   compareReadyTimeoutSeconds: 3
   handsTogetherDistance: 0.03
   requireBothPinchHeldToComplete: 1
+  poseRecognizer: {fileID: 136429833}
+  poseEvalIntervalSeconds: 0.1
+  saveGestureName: Save
+  saveEntryHoldTimeoutSeconds: 2
   capturing: 0
   captureElapsed: 0
   bufferFrameCount: 0
@@ -679,6 +684,8 @@ MonoBehaviour:
   compareReady: 0
   compareReadyElapsed: 0
   handsDistance: -1
+  savePending: 0
+  lastPoseResult: 
 --- !u!114 &136429831
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -744,6 +751,33 @@ MonoBehaviour:
   jointOrigin: {fileID: 5534409079552104266}
   normalizeToCameraOrientation: 1
   referenceCamera: {fileID: 1948693200}
+--- !u!114 &136429833
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 136429828}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b92e4d5c1237647cc8f5f4a9aad37d0e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HandPoseRecognizer
+  fingerExtendedRatio: 0.9
+  palmUpDotThreshold: 0.68
+  scribbleWindowSeconds: 1.5
+  scribbleMaxPalmDistance: 0.06
+  scribbleMinReversals: 3
+  scribbleMinLateralTravel: 0.03
+  scribbleJitterDeadband: 0.002
+  lastResult: 0
+  leftHandTracked: 0
+  rightHandTracked: 0
+  leftPalmOpen: 0
+  leftPalmFacingUp: 0
+  indexPalmDistance: -1
+  scribbleReversals: 0
+  scribbleLateralTravel: 0
 --- !u!1 &152278406
 GameObject:
   m_ObjectHideFlags: 0
