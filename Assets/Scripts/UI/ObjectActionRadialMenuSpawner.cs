@@ -10,6 +10,7 @@ public class ObjectActionRadialMenuSpawner : MonoBehaviour
     public Camera referenceCamera;
 
     [Header("Filtering")]
+    public bool filterByConfidence = false;
     public float confidenceThreshold = 0.25f;
     public float minBboxSize = 0.005f;
     public bool replaceExistingMenu = true;
@@ -76,7 +77,7 @@ public class ObjectActionRadialMenuSpawner : MonoBehaviour
 
         Debug.Log($"[ObjectActionMenu] detection result received request_id={detection.requestId} label={detection.label} confidence={detection.confidence:F3} bbox=[{detection.x1:F2},{detection.y1:F2},{detection.x2:F2},{detection.y2:F2}]");
 
-        if (detection.confidence < confidenceThreshold)
+        if (filterByConfidence && detection.confidence < confidenceThreshold)
         {
             Debug.LogWarning($"[ObjectActionMenu] detection skipped: confidence {detection.confidence:F3} < threshold {confidenceThreshold:F3}");
             return false;

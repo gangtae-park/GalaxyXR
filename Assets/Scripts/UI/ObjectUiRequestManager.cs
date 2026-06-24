@@ -43,6 +43,7 @@ public class ObjectUiRequestManager : MonoBehaviour
     public MsgSender msgSender;
     public VlmResultReceiver resultReceiver;
     public ObjectActionRadialMenuSpawner radialMenuSpawner;
+    public ObjectDetectionBubbleSpawner bubbleSpawner;
     public EyeGazeReader eyeGazeReader;
     public Camera referenceCamera;
 
@@ -127,6 +128,7 @@ public class ObjectUiRequestManager : MonoBehaviour
     public void BeginObjectUiRequest()
     {
         ResolveReferences();
+        if (bubbleSpawner != null) bubbleSpawner.ClearBubbles();
         if (_requestRoutine != null)
         {
             Debug.LogWarning($"[OBJECT_UI][WARN] request already active request_id={activeRequestId}");
@@ -148,6 +150,7 @@ public class ObjectUiRequestManager : MonoBehaviour
             _requestRoutine = null;
         }
         Debug.Log($"[OBJECT_UI] cancelled request_id={activeRequestId}");
+        if (bubbleSpawner != null) bubbleSpawner.ClearBubbles();
         activeRequestId = "";
         state = RequestState.Idle;
         _hasActiveCapturePose = false;
@@ -327,6 +330,7 @@ public class ObjectUiRequestManager : MonoBehaviour
         }
 
         int count = payload.detections != null ? payload.detections.Length : 0;
+        Debug.Log($"[OBJECT_UI] YOLO detections received: {count}");
         Debug.Log($"[OBJECT_UI] YOLO response request_id={responseRequestId} detections={count}");
         if (count == 0)
         {
@@ -336,36 +340,46 @@ public class ObjectUiRequestManager : MonoBehaviour
             return;
         }
 
-        int selectedIndex = SelectDetection(payload.detections);
-        VlmResultReceiver.VlmDetection selected = payload.detections[selectedIndex];
-        DetectionResult detection = ToDetectionResult(selected, payload, responseRequestId);
-        if (detection == null)
-        {
-            Debug.LogWarning("[OBJECT_UI][WARN] selected detection is invalid; using search-panel fallback position");
-            SpawnSearchPanelFallback(responseRequestId, "invalid_detection");
-            FinishRequest();
-            return;
-        }
-        detection.requireExactRequestContext = true;
-
-        Debug.Log($"[OBJECT_UI] selected detection index={selectedIndex} class={detection.label} conf={detection.confidence:F3} bbox=[{detection.x1:F1},{detection.y1:F1},{detection.x2:F1},{detection.y2:F1}]");
-        Vector2 center = detection.Center;
-        Vector2 normalized = new Vector2(
-            center.x / Mathf.Max(1, detection.imageWidth),
-            center.y / Mathf.Max(1, detection.imageHeight));
-        Debug.Log($"[OBJECT_UI] bbox_center_px=({center.x:F1},{center.y:F1}) normalized=({normalized.x:F3},{normalized.y:F3})");
-
-        ObjectActionRadialMenuSpawner spawner = ResolveRadialMenuSpawner();
+        ObjectDetectionBubbleSpawner spawner = ResolveBubbleSpawner();
         if (spawner == null)
         {
-            Debug.LogWarning("[OBJECT_UI][WARN] radial menu spawner unavailable.");
+            Debug.LogWarning("[OBJECT_UI][WARN] bubble spawner unavailable; object bubbles cannot be shown.");
             FinishRequest();
             return;
         }
 
-        bool spawnedOnDetection = spawner.HandleDetectionResult(detection, payload, activeRequestId);
-        if (!spawnedOnDetection)
-            SpawnSearchPanelFallback(responseRequestId, "detection_anchor_failed");
+        System.Collections.Generic.List<DetectionResult> validDetections = new System.Collections.Generic.List<DetectionResult>();
+        for (int i = 0; i < payload.detections.Length; i++)
+        {
+            DetectionResult detection = ToDetectionResult(payload.detections[i], payload, responseRequestId);
+            if (detection == null)
+            {
+                Debug.LogWarning($"[OBJECT_UI][WARN] detection[{i}] ignored because bbox/metadata is invalid.");
+                continue;
+            }
+
+            detection.requireExactRequestContext = true;
+            validDetections.Add(detection);
+
+            Vector2 center = detection.Center;
+            Vector2 normalized = new Vector2(
+                center.x / Mathf.Max(1, detection.imageWidth),
+                center.y / Mathf.Max(1, detection.imageHeight));
+            Debug.Log($"[OBJECT_UI] detection[{i}] class={detection.label} conf={detection.confidence:F3} bbox=[{detection.x1:F1},{detection.y1:F1},{detection.x2:F1},{detection.y2:F1}] center_px=({center.x:F1},{center.y:F1}) normalized=({normalized.x:F3},{normalized.y:F3})");
+        }
+
+        int bubbleCount = spawner.ShowBubbles(validDetections.ToArray(), payload, responseRequestId);
+        if (bubbleCount <= 0)
+        {
+            Debug.LogWarning("[OBJECT_UI][WARN] no bubbles spawned; using search-panel fallback position");
+            SpawnSearchPanelFallback(responseRequestId, "bubble_spawn_failed");
+        }
+        else
+        {
+            Debug.Log($"[OBJECT_UI] spawned object bubbles count={bubbleCount} request_id={responseRequestId}");
+        }
+
+        // The server request is complete. The saved requestId is kept inside each bubble for later click handling.
         FinishRequest();
     }
 
@@ -520,6 +534,61 @@ public class ObjectUiRequestManager : MonoBehaviour
         hasViewport = true;
     }
 
+    ObjectDetectionBubbleSpawner ResolveBubbleSpawner()
+    {
+        if (bubbleSpawner != null) return bubbleSpawner;
+        bubbleSpawner = GetComponent<ObjectDetectionBubbleSpawner>();
+        if (bubbleSpawner != null) return bubbleSpawner;
+        Transform parent = transform.parent;
+        if (parent != null)
+        {
+            bubbleSpawner = parent.GetComponent<ObjectDetectionBubbleSpawner>();
+            if (bubbleSpawner != null) return bubbleSpawner;
+        }
+        bubbleSpawner = FindObjectOfType<ObjectDetectionBubbleSpawner>();
+        if (bubbleSpawner != null) return bubbleSpawner;
+
+        ObjectActionRadialMenuSpawner radialSpawner = ResolveRadialMenuSpawner();
+        bubbleSpawner = ObjectDetectionBubbleSpawner.CreateRuntimeDefault(
+            radialSpawner,
+            referenceCamera != null ? referenceCamera : Camera.main);
+        Debug.Log("[OBJECT_UI] created runtime ObjectDetectionBubbleSpawner; detections will show as bubbles before action panel.");
+        return bubbleSpawner;
+    }
+
+    void SpawnSingleSelectedDetection(VlmResultReceiver.VlmResultPayload payload, string responseRequestId, string reason)
+    {
+        if (payload == null || payload.detections == null || payload.detections.Length == 0)
+        {
+            SpawnSearchPanelFallback(responseRequestId, reason + "_no_detections");
+            return;
+        }
+
+        int selectedIndex = SelectDetection(payload.detections);
+        VlmResultReceiver.VlmDetection selected = payload.detections[selectedIndex];
+        DetectionResult detection = ToDetectionResult(selected, payload, responseRequestId);
+        if (detection == null)
+        {
+            Debug.LogWarning($"[OBJECT_UI][WARN] fallback selected detection is invalid reason={reason}; using search-panel fallback position");
+            SpawnSearchPanelFallback(responseRequestId, reason + "_invalid_detection");
+            return;
+        }
+
+        detection.requireExactRequestContext = true;
+        Debug.Log($"[OBJECT_UI] fallback single selection reason={reason} index={selectedIndex} class={detection.label} conf={detection.confidence:F3}");
+
+        ObjectActionRadialMenuSpawner radialSpawner = ResolveRadialMenuSpawner();
+        if (radialSpawner == null)
+        {
+            Debug.LogWarning($"[OBJECT_UI][WARN] radial menu spawner unavailable for fallback reason={reason}.");
+            return;
+        }
+
+        bool spawnedOnDetection = radialSpawner.HandleDetectionResult(detection, payload, responseRequestId);
+        if (!spawnedOnDetection)
+            SpawnSearchPanelFallback(responseRequestId, reason + "_anchor_failed");
+    }
+
     ObjectActionRadialMenuSpawner ResolveRadialMenuSpawner()
     {
         if (radialMenuSpawner != null) return radialMenuSpawner;
@@ -552,6 +621,7 @@ public class ObjectUiRequestManager : MonoBehaviour
         if (msgSender == null) msgSender = FindObjectOfType<MsgSender>();
         if (resultReceiver == null) resultReceiver = FindObjectOfType<VlmResultReceiver>();
         if (radialMenuSpawner == null) radialMenuSpawner = FindObjectOfType<ObjectActionRadialMenuSpawner>();
+        if (bubbleSpawner == null) bubbleSpawner = FindObjectOfType<ObjectDetectionBubbleSpawner>();
         if (eyeGazeReader == null) eyeGazeReader = FindObjectOfType<EyeGazeReader>();
         if (referenceCamera == null) referenceCamera = Camera.main;
     }

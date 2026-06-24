@@ -21,6 +21,8 @@ public class VlmResultReceiver : MonoBehaviour
         public string typical_use;
         public string info;
         public string answer;
+        public string result;
+        public string text;
         public string translation;
         public string result_search;
         public string error;
@@ -113,6 +115,8 @@ public class VlmResultReceiver : MonoBehaviour
     {
         while (_queue.TryDequeue(out var payload))
         {
+            if (verboseLogging) LogReceivedPayload(payload);
+
             try { OnResult?.Invoke(payload); }
             catch (Exception e) { Debug.LogError($"[Study Log][VlmResultReceiver] OnResult subscriber threw: {e}"); }
 
@@ -183,10 +187,37 @@ public class VlmResultReceiver : MonoBehaviour
             if (payload == null) continue;
 
             _queue.Enqueue(payload);
-            if (verboseLogging)
-            {
-                Debug.Log($"[Study Log][VlmResultReceiver] received gesture={payload.gesture} name={payload.response?.name}");
-            }
+        }
+    }
+
+    void LogReceivedPayload(VlmResultPayload payload)
+    {
+        if (payload == null) return;
+
+        VlmResponse response = payload.response;
+        string requestId = FirstNonEmpty(payload.request_id, payload.requestId);
+        string name = response != null ? response.name : "";
+        string text = FirstNonEmpty(
+            response != null ? response.text : "",
+            payload.target_meta != null ? payload.target_meta.user_question : "");
+        string transcript = payload.target_meta != null ? payload.target_meta.user_question : "";
+        string answer = FirstNonEmpty(
+            response != null ? response.answer : "",
+            response != null ? response.result : "",
+            response != null ? response.result_search : "",
+            response != null ? response.info : "",
+            response != null ? response.description : "",
+            response != null ? response.raw : "",
+            response != null ? response.error : "",
+            payload.reason);
+
+        Debug.Log($"[VLM_RESULT] received raw gesture={payload.gesture} name={name} text={text} answer={answer} request_id={requestId}");
+
+        if (payload.gesture == "VoiceAsk")
+        {
+            Debug.Log($"[VOICE_RESULT] server response received request_id={requestId}");
+            Debug.Log($"[VOICE_RESULT] transcript='{transcript}'");
+            Debug.Log($"[VOICE_RESULT] answer='{answer}'");
         }
     }
 

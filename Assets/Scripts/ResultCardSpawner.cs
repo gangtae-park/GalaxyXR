@@ -23,8 +23,8 @@ Responsibilities:
                               user's voice-question via card.OnQuestionSubmitted;
                               pass the captured question to MsgSender.SendAskQuestion
        "Ask"  + with answer-> destroy any AskQuestionCard, spawn AskResultCard
-       "VoiceAsk"         -> treated as "Ask" for compatibility with voice-side servers
-                              with (name, question, answer)
+       "VoiceAsk"         -> spawn a voice result card directly; never spawn
+                              the listening AskQuestionCard from a server response
        other gestures     -> spawn compact generic cards using the mapping in
                               HandleResult without changing backend semantics
 
@@ -93,6 +93,7 @@ public class ResultCardSpawner : MonoBehaviour
     /// or null if no Ask flow is in progress. Voice recognition components can read
     /// this and call .Submit(text) when they have the transcript.</summary>
     public AskQuestionCard PendingAskQuestion => _pendingAskQuestion;
+    public bool HasPendingVoiceListeningCard => _pendingAskQuestion != null && IsVoiceListeningCard(_pendingAskQuestion);
 
     void OnEnable()
     {
@@ -155,6 +156,11 @@ public class ResultCardSpawner : MonoBehaviour
         string gesture = payload.gesture;
         if (string.IsNullOrEmpty(gesture)) return;
         if (gesture == "ObjectUI") return;
+        if (gesture == "VoiceAsk")
+        {
+            SpawnVoiceResultCard(payload);
+            return;
+        }
 
         // Anchor handles fail at the spawner level (status=="fail" -> skip).
         // The other cards typically still want to render something on fail
@@ -174,10 +180,6 @@ public class ResultCardSpawner : MonoBehaviour
                 break;
 
             case "Ask":
-                DispatchAsk(payload);
-                break;
-
-            case "VoiceAsk":
                 DispatchAsk(payload);
                 break;
 
@@ -337,9 +339,77 @@ public class ResultCardSpawner : MonoBehaviour
 
     // ---------- Ask (two-step) ----------
 
+    void SpawnVoiceResultCard(VlmResultReceiver.VlmResultPayload payload)
+    {
+        ClearVoiceListeningCards("voice_response");
+        ClearAskQuestionCardForVoiceResponse("voice_response");
+
+        string requestId = FirstNonEmpty(
+            payload != null ? payload.request_id : "",
+            payload != null ? payload.requestId : "");
+        string transcript = payload != null && payload.target_meta != null
+            ? payload.target_meta.user_question
+            : "";
+        string answer = VoiceResultBody(payload);
+        string title = VoiceResultTitle(payload);
+
+        Debug.Log($"[VOICE_RESULT] server response received request_id={requestId}");
+        Debug.Log($"[VOICE_RESULT] transcript='{transcript}'");
+        Debug.Log($"[VOICE_RESULT] answer='{answer}'");
+
+        if (string.IsNullOrWhiteSpace(answer))
+        {
+            string name = payload != null && payload.response != null ? payload.response.name : "";
+            if (IsVoiceRequestName(name))
+                Debug.LogWarning("[VOICE_RESULT][WARN] ignored placeholder name='Voice request'");
+            else
+                Debug.LogWarning($"[VOICE_RESULT][WARN] voice response has no displayable result request_id={requestId}");
+            return;
+        }
+
+        Debug.Log($"[VOICE_RESULT] spawning result card title='{title}'");
+        ReplaceCurrentCard();
+
+        if (askResultCardPrefab != null)
+        {
+            GameObject go = Instantiate(askResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+            ApplyPanelLayout(go, ARPanelLayoutKind.AnswerCard);
+            var card = go.GetComponent<AskResultCard>();
+            if (card != null) card.SetContent(title, transcript, answer);
+            _currentCard = go;
+            Debug.Log($"[RESULT_CARD] spawned VoiceResultCard request_id={requestId}");
+            return;
+        }
+
+        if (searchResultCardPrefab != null)
+        {
+            GameObject go = Instantiate(searchResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+            ApplyPanelLayout(go, ARPanelLayoutKind.InfoCard);
+            var card = go.GetComponent<SearchResultCard>();
+            if (card != null) card.SetContent(title, answer);
+            _currentCard = go;
+            Debug.Log($"[RESULT_CARD] spawned VoiceResultCard request_id={requestId}");
+            return;
+        }
+
+        Debug.LogWarning("[VOICE_RESULT][WARN] no result card prefab assigned for voice response.");
+    }
+
     void DispatchAsk(VlmResultReceiver.VlmResultPayload payload)
     {
         bool hasAnswer = !string.IsNullOrEmpty(payload.response.answer);
+        bool failed = payload.status != null
+            && payload.status.Equals("fail", System.StringComparison.OrdinalIgnoreCase);
+
+        if (failed && !hasAnswer)
+        {
+            payload.response.answer = FirstNonEmpty(
+                payload.response != null ? payload.response.error : "",
+                payload.reason,
+                "No answer was returned.");
+            hasAnswer = true;
+        }
+
         if (!hasAnswer) SpawnAskQuestion(payload);
         else            SpawnAskResult(payload);
     }
@@ -403,7 +473,7 @@ public class ResultCardSpawner : MonoBehaviour
         ApplyPanelLayout(go, ARPanelLayoutKind.AnswerCard);
         var card = go.GetComponent<AskResultCard>();
         if (card != null)
-            card.SetContent(payload.response.name, question, payload.response.answer);
+            card.SetContent(DisplayNameForAskResult(payload), question, payload.response.answer);
         _currentCard = go;
         if (verboseLogging)
             Debug.Log($"[ResultCardSpawner] spawned AskResultCard name='{payload.response.name}'");
@@ -516,7 +586,121 @@ public class ResultCardSpawner : MonoBehaviour
         return "";
     }
 
+    static bool IsVoiceListeningCard(AskQuestionCard card)
+    {
+        return card != null && IsVoiceRequestName(card.ObjectName);
+    }
+
+    static bool IsVoiceRequestName(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            && value.Trim().Equals("Voice request", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    static string DisplayNameForAskResult(VlmResultReceiver.VlmResultPayload payload)
+    {
+        return payload != null && payload.response != null ? payload.response.name : "";
+    }
+
+    static string VoiceResultTitle(VlmResultReceiver.VlmResultPayload payload)
+    {
+        string name = payload != null && payload.response != null ? payload.response.name : "";
+        if (!IsVoiceRequestName(name) && !string.IsNullOrWhiteSpace(name))
+            return name;
+        return "Voice result";
+    }
+
+    static string VoiceResultBody(VlmResultReceiver.VlmResultPayload payload)
+    {
+        VlmResultReceiver.VlmResponse response = payload != null ? payload.response : null;
+        return FirstNonEmpty(
+            response != null ? response.answer : "",
+            response != null ? response.result : "",
+            response != null ? response.text : "",
+            response != null ? response.result_search : "",
+            response != null ? response.info : "",
+            response != null ? response.description : "",
+            response != null ? response.raw : "",
+            response != null ? response.error : "",
+            payload != null ? payload.reason : "");
+    }
+
     // ---------- helpers ----------
+
+    public void ClearVoiceListeningCards(string reason = "cleanup")
+    {
+        bool removed = false;
+
+        if (_pendingAskQuestion != null && IsVoiceListeningCard(_pendingAskQuestion))
+        {
+            _pendingAskQuestion.OnQuestionSubmitted -= HandleQuestionSubmitted;
+            GameObject cardObject = _pendingAskQuestion.gameObject;
+            if (cardObject != null) Destroy(cardObject);
+            if (_currentCard == cardObject) _currentCard = null;
+            _pendingAskQuestion = null;
+            removed = true;
+        }
+
+        if (_currentCard != null)
+        {
+            AskQuestionCard card = _currentCard.GetComponent<AskQuestionCard>();
+            if (card != null && IsVoiceListeningCard(card))
+            {
+                if (_pendingAskQuestion == card)
+                {
+                    card.OnQuestionSubmitted -= HandleQuestionSubmitted;
+                    _pendingAskQuestion = null;
+                }
+                Destroy(_currentCard);
+                _currentCard = null;
+                removed = true;
+            }
+        }
+
+        if (removed)
+            Debug.Log($"[VOICE_UI] listening panel hidden reason={reason}");
+    }
+
+    bool ClearAskQuestionCardForVoiceResponse(string reason)
+    {
+        bool removed = false;
+
+        if (_pendingAskQuestion != null)
+        {
+            _pendingAskQuestion.OnQuestionSubmitted -= HandleQuestionSubmitted;
+            GameObject cardObject = _pendingAskQuestion.gameObject;
+            if (cardObject != null) Destroy(cardObject);
+            if (_currentCard == cardObject) _currentCard = null;
+            _pendingAskQuestion = null;
+            removed = true;
+        }
+
+        if (_currentCard != null)
+        {
+            AskQuestionCard card = _currentCard.GetComponent<AskQuestionCard>();
+            if (card != null)
+            {
+                Destroy(_currentCard);
+                _currentCard = null;
+                removed = true;
+            }
+        }
+
+        if (removed)
+        {
+            Debug.LogWarning("[VOICE_RESULT][WARN] response routed to listening card; forcing result mode");
+            Debug.Log($"[VOICE_UI] listening panel hidden reason={reason}");
+        }
+
+        return removed;
+    }
+
+    public void RemoveCardsBySource(string source)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return;
+        if (source == "voice-listening" || source == "voice")
+            ClearVoiceListeningCards(source);
+    }
 
     void ReplaceCurrentCard()
     {

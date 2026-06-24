@@ -87,7 +87,15 @@ public class InputModeManager : MonoBehaviour
         interactionLogger?.LogModeChanged(currentMode);
 
         if (currentMode == InputMode.UIOnly && startObjectUiRequestOnUIOnly)
-            Debug.LogWarning("[InputModeManager] startObjectUiRequestOnUIOnly is deprecated; use an explicit Object UI button/trigger to start capture.");
+        {
+            if (objectUiRequestManager == null)
+                objectUiRequestManager = FindObjectOfType<ObjectUiRequestManager>();
+
+            if (objectUiRequestManager != null)
+                objectUiRequestManager.BeginObjectUiRequest();
+            else
+                Debug.LogWarning("[InputModeManager] UIOnly selected but ObjectUiRequestManager is not assigned.");
+        }
     }
 
     void ApplyMode()
@@ -100,6 +108,9 @@ public class InputModeManager : MonoBehaviour
             || (currentMode == InputMode.VoiceOnly && keepGazeEnabledInVoiceOnly)
             || (currentMode == InputMode.UIOnly && keepGazeEnabledInUIOnly);
 
+        if (!voiceEnabled)
+            CleanupVoiceListeningUi("mode_changed");
+
         SetEnabled(gestureControllers, gestureEnabled);
         SetEnabled(voiceControllers, voiceEnabled);
         SetEnabled(uiControllers, uiEnabled);
@@ -108,6 +119,7 @@ public class InputModeManager : MonoBehaviour
 
         if (disableLegacyAskVoiceController && legacyAskVoiceInputController != null)
         {
+            legacyAskVoiceInputController.HideListeningPanel("android_stt_active");
             legacyAskVoiceInputController.allowLegacyRecording = false;
             legacyAskVoiceInputController.enabled = false;
             if (verboseLogging)
@@ -128,6 +140,24 @@ public class InputModeManager : MonoBehaviour
             Behaviour controller = controllers[i];
             if (controller == null || controller == this) continue;
             if (controller.enabled != enabled) controller.enabled = enabled;
+        }
+    }
+
+    void CleanupVoiceListeningUi(string reason)
+    {
+        Debug.Log("[InputModeManager] voice disabled -> cleanup voice listening UI");
+        CleanupVoiceListeningUi(voiceControllers, reason);
+        if (legacyAskVoiceInputController != null)
+            legacyAskVoiceInputController.HideListeningPanel(reason);
+    }
+
+    void CleanupVoiceListeningUi(Behaviour[] controllers, string reason)
+    {
+        if (controllers == null) return;
+        for (int i = 0; i < controllers.Length; i++)
+        {
+            VoiceInputManager manager = controllers[i] as VoiceInputManager;
+            if (manager != null) manager.CancelCurrentVoiceSession(reason);
         }
     }
 

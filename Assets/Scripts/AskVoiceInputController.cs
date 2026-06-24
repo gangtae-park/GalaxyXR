@@ -100,7 +100,21 @@ public class AskVoiceInputController : MonoBehaviour
 
     void OnDisable()
     {
-        if (isRecording) CancelRecording("controller disabled");
+        HideListeningPanel("controller disabled");
+    }
+
+    public void HideListeningPanel(string reason = "cleanup")
+    {
+        if (isRecording) CancelRecording(reason);
+        if (spawner == null) spawner = FindObjectOfType<ResultCardSpawner>();
+        if (spawner != null) spawner.ClearVoiceListeningCards($"legacy_{reason}");
+
+        if (_activeCard != null)
+        {
+            _activeCard.Close();
+            _activeCard = null;
+            Debug.Log($"[VOICE_UI] legacy listening panel hidden reason={reason}");
+        }
     }
 
     void StartRecording()

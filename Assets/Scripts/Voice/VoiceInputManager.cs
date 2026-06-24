@@ -93,13 +93,7 @@ public class VoiceInputManager : MonoBehaviour
 
     void OnDisable()
     {
-        if (speechBridge != null && speechBridge.IsListening) speechBridge.CancelListening();
-        if (_snapshotRoutine != null)
-        {
-            StopCoroutine(_snapshotRoutine);
-            _snapshotRoutine = null;
-        }
-        FinishListening("disabled");
+        CancelCurrentVoiceSession("disabled");
         UnsubscribeBridge();
     }
 
@@ -141,6 +135,7 @@ public class VoiceInputManager : MonoBehaviour
 
         waitingForFinalTranscript = true;
         OnListeningStarted?.Invoke(currentMode);
+        Debug.Log($"[VOICE_UI] listening panel shown request_id={CurrentVoiceRequestId()}");
         speechBridge.StartListening();
         StartTimeout();
 
@@ -155,8 +150,24 @@ public class VoiceInputManager : MonoBehaviour
 
     public void CancelListening()
     {
+        CancelCurrentVoiceSession("cancelled");
+    }
+
+    public void CancelCurrentVoiceSession(string reason = "cancelled")
+    {
         if (speechBridge != null && speechBridge.IsListening) speechBridge.CancelListening();
-        FinishListening("cancelled");
+        if (_snapshotRoutine != null)
+        {
+            StopCoroutine(_snapshotRoutine);
+            _snapshotRoutine = null;
+        }
+        FinishListening(reason);
+    }
+
+    public void HideListeningUi(string reason = "cleanup")
+    {
+        ResolveReferences();
+        resultCardSpawner?.ClearVoiceListeningCards(reason);
     }
 
     public void SubmitMockTranscript(string transcript)
@@ -166,18 +177,32 @@ public class VoiceInputManager : MonoBehaviour
 
     void HandleFinalTranscript(string transcript)
     {
+        if (!waitingForFinalTranscript)
+        {
+            Debug.LogWarning($"[VOICE_UI][WARN] ignored stale final transcript request_id={CurrentVoiceRequestId()}");
+            HideListeningUi("stale_transcript");
+            return;
+        }
+
         lastTranscript = transcript;
+        string rawTranscript = transcript == null ? "" : transcript.Trim();
+        Debug.Log($"[VOICE_UI] transcript received request_id={CurrentVoiceRequestId()} text={rawTranscript}");
         LogUnicodeCodePoints("[VoiceInputManager] final", transcript);
         OnFinalTranscript?.Invoke(transcript ?? "");
-        FinishListening("final");
 
         ResolveReferences();
 
-        string rawTranscript = transcript == null ? "" : transcript.Trim();
         if (string.IsNullOrWhiteSpace(rawTranscript))
         {
+            FinishListening("final");
             LogFailure("VOICE_TRANSCRIPT", "Final transcript is empty.");
             return;
+        }
+
+        if (resultCardSpawner != null && resultCardSpawner.HasPendingVoiceListeningCard)
+        {
+            resultCardSpawner.ClearVoiceListeningCards("stale_placeholder_before_transcript");
+            Debug.LogWarning("[VOICE_UI][WARN] ignored placeholder voice request card");
         }
 
         if (routePendingAskCard && resultCardSpawner != null && resultCardSpawner.PendingAskQuestion != null)
@@ -185,20 +210,26 @@ public class VoiceInputManager : MonoBehaviour
             resultCardSpawner.PendingAskQuestion.SubmitLocal(rawTranscript);
             SendVoiceSnapshotOrFallback(rawTranscript, "ASK_QUESTION");
             LogSuccess(sendSnapshotVoiceRequest ? "VOICE_SNAPSHOT" : "ASK_QUESTION", rawTranscript);
+            FinishListening("final");
             return;
         }
 
         if (!sendVoiceCommandPacket)
+        {
+            FinishListening("final");
             return;
+        }
 
         if (msgSender == null)
         {
+            FinishListening("final");
             LogFailure("VOICE_COMMAND", "MsgSender is not assigned.");
             return;
         }
 
         SendVoiceSnapshotOrFallback(rawTranscript, "VOICE_COMMAND");
         LogSuccess(sendSnapshotVoiceRequest ? "VOICE_SNAPSHOT" : "VOICE_COMMAND", rawTranscript);
+        FinishListening("final");
     }
 
     void StartVoiceRequestContext()
@@ -395,12 +426,20 @@ public class VoiceInputManager : MonoBehaviour
 
     void HandlePartialTranscript(string transcript)
     {
+        if (!waitingForFinalTranscript) return;
         OnPartialTranscript?.Invoke(transcript ?? "");
         if (verboseLogging) Debug.Log($"[VoiceInputManager] partial transcript='{transcript}'");
     }
 
     void HandleSpeechError(int errorCode, string message)
     {
+        if (!waitingForFinalTranscript)
+        {
+            Debug.LogWarning($"[VOICE_UI][WARN] ignored stale STT_ERROR code={errorCode} {message}");
+            HideListeningUi("stale_error");
+            return;
+        }
+
         FinishListening("error");
         LogFailure("STT_ERROR", $"code={errorCode} {message}");
     }
@@ -434,7 +473,24 @@ public class VoiceInputManager : MonoBehaviour
         bool wasListening = waitingForFinalTranscript;
         StopTimeout();
         waitingForFinalTranscript = false;
+        string uiReason = VoiceUiHideReason(reason);
+        HideListeningUi(uiReason);
+        if (wasListening)
+            Debug.Log($"[VOICE_UI] listening panel hidden reason={uiReason}");
         if (wasListening) OnListeningStopped?.Invoke(reason ?? "");
+    }
+
+    string CurrentVoiceRequestId()
+    {
+        return _activeVoiceRequest != null && !string.IsNullOrEmpty(_activeVoiceRequest.requestId)
+            ? _activeVoiceRequest.requestId
+            : "";
+    }
+
+    static string VoiceUiHideReason(string reason)
+    {
+        if (reason == "final") return "transcript";
+        return string.IsNullOrEmpty(reason) ? "cleanup" : reason;
     }
 
     void SubscribeBridge()
