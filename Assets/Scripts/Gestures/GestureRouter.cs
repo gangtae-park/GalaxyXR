@@ -4,9 +4,11 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /*
-Single component that drives the unified gesture pipeline:
+Single component that drives the unified gesture pipeline.
+
+SINGLE-HAND gestures (Search / Ask / Translate / Anchor):
 1) Watch the right-hand pinch action. The rising edge of "pinch pressed" starts a capture window.
-2) For exactly 'captureSeconds' after that edge, sample HandFeatureSource at minFrameInterval into a buffer.
+2) For 'captureSeconds' after that edge, sample HandFeatureSource at minFrameInterval into a buffer.
 3) At the end of the window or every 'recognitionIntervalSeconds', hand the buffer to JackknifeUnifiedRecognizer.
     match   -> SendGestureEvent(name, END) + RECOGNIZED
     reject  -> SendGestureEvent(Pending, END) + FAIL
@@ -34,47 +36,84 @@ public class GestureRouter : MonoBehaviour
     [Header("Routing")]
     public string pendingReferentName = "Pending";
 
+    [Header("Compare (two-hand)")]
+    public InputActionReference leftPinchAction;
+    public InputActionReference rightPinchPositionAction;
+    public InputActionReference leftPinchPositionAction;
+    public string compareGestureName = "Compare";
+    public float compareReadyTimeoutSeconds = 3f;
+    public float handsTogetherDistance = 0.03f;
+    public bool requireBothPinchHeldToComplete = true;
+
     [Header("Status (read-only)")]
     [SerializeField] private bool capturing;
     [SerializeField] private float captureElapsed;
     [SerializeField] private int bufferFrameCount;
     [SerializeField] private string lastRecognized = "";
+    [SerializeField] private bool compareReady;
+    [SerializeField] private float compareReadyElapsed;
+    [SerializeField] private float handsDistance = -1f;
 
     public bool IsCapturing => capturing;
+    public bool IsCompareReady => compareReady;
     public int BufferFrameCount => bufferFrameCount;
 
     public event Action OnCaptureStarted;
     public event Action<string> OnCaptureRecognized;
     public event Action OnCaptureRejected;
+    public event Action OnCompareReady;
 
     private bool _wasPressed;
+    private bool _leftWasPressed;
     private float _captureStartTime;
     private float _lastSampleTime = -1f;
     private float _nextRecognitionTime;
+    private float _compareReadyStartTime;
     private readonly List<float[]> _frames = new List<float[]>(128);
 
     void OnEnable()
     {
         pinchAction?.action.Enable();
+        leftPinchAction?.action.Enable();
+        rightPinchPositionAction?.action.Enable();
+        leftPinchPositionAction?.action.Enable();
     }
 
     void OnDisable()
     {
         pinchAction?.action.Disable();
+        leftPinchAction?.action.Disable();
+        rightPinchPositionAction?.action.Disable();
+        leftPinchPositionAction?.action.Disable();
     }
 
     void Update()
     {
-        bool isPressed = ReadPressed();
+        bool rightPressed = ReadPressed(pinchAction);
+        bool leftPressed = ReadPressed(leftPinchAction);
 
-        // Rising edge starts a capture if we're idle.
-        if (isPressed && !_wasPressed && !capturing)
+        if (compareReady)
         {
-            StartCapture();
+            UpdateCompareReady(rightPressed, leftPressed);
         }
-        _wasPressed = isPressed;
+        else
+        {
+            // Rising edge of the right pinch starts a capture if we're idle.
+            if (rightPressed && !_wasPressed && !capturing)
+                StartCapture();
 
-        if (capturing) ContinueCapture();
+            if (capturing)
+            {
+                // A left pinch during the capture window arms Compare
+                if (leftPressed && !_leftWasPressed)
+                    EnterCompareReady();
+                else
+                    ContinueCapture();
+            }
+        }
+
+        _wasPressed = rightPressed;
+        _leftWasPressed = leftPressed;
     }
 
     void StartCapture()
@@ -123,7 +162,7 @@ public class GestureRouter : MonoBehaviour
 
         // 3) Timeout -> FAIL.
         if (captureElapsed >= captureSeconds)
-        {   
+        {
             FinishWithReject("timeout");
         }
     }
@@ -162,10 +201,70 @@ public class GestureRouter : MonoBehaviour
         try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
 
-    bool ReadPressed()
+    // ====== Compare ======
+    void EnterCompareReady()
     {
-        if (pinchAction == null || pinchAction.action == null) return false;
-        var act = pinchAction.action;
+        capturing = false;
+        compareReady = true;
+        _compareReadyStartTime = Time.time;
+        compareReadyElapsed = 0f;
+        handsDistance = -1f;
+        lastRecognized = "";
+        Debug.Log("[Study Log][GestureRouter] COMPARE READY");
+
+        SendEvent(compareGestureName, "READY");
+        try { OnCompareReady?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    void UpdateCompareReady(bool rightPressed, bool leftPressed)
+    {
+        compareReadyElapsed = Time.time - _compareReadyStartTime;
+
+        if (requireBothPinchHeldToComplete && (!rightPressed || !leftPressed))
+        {
+            FinishCompareCancel("a hand released before the hands met");
+            return;
+        }
+
+        if (compareReadyElapsed >= compareReadyTimeoutSeconds)
+        {
+            FinishCompareCancel("timeout");
+            return;
+        }
+
+        if (TryReadPinchPosition(rightPinchPositionAction, out Vector3 rp) &&
+            TryReadPinchPosition(leftPinchPositionAction, out Vector3 lp))
+        {
+            handsDistance = Vector3.Distance(rp, lp);
+            if (handsDistance <= handsTogetherDistance)
+                FinishCompareMatch();
+        }
+    }
+
+    void FinishCompareMatch()
+    {
+        compareReady = false;
+        lastRecognized = compareGestureName;
+        Debug.Log($"[Study Log][GestureRouter] COMPARE RECOGNIZED (hands met at {handsDistance:F3}m).");
+        SendEvent(compareGestureName, "END");
+        SendEvent(compareGestureName, "RECOGNIZED");
+        try { OnCaptureRecognized?.Invoke(compareGestureName); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    void FinishCompareCancel(string reason)
+    {
+        compareReady = false;
+        lastRecognized = "compare-cancelled";
+        Debug.Log($"[Study Log][GestureRouter] COMPARE cancelled ({reason}).");
+        SendEvent(pendingReferentName, "END");
+        SendEvent(pendingReferentName, "FAIL");
+        try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    bool ReadPressed(InputActionReference actionRef)
+    {
+        if (actionRef == null || actionRef.action == null) return false;
+        var act = actionRef.action;
         try
         {
             if (act.activeControl != null && act.activeControl.valueType == typeof(float))
@@ -173,6 +272,14 @@ public class GestureRouter : MonoBehaviour
         }
         catch { }
         try { return act.IsPressed(); } catch { return false; }
+    }
+
+    bool TryReadPinchPosition(InputActionReference actionRef, out Vector3 pos)
+    {
+        pos = Vector3.zero;
+        if (actionRef == null || actionRef.action == null) return false;
+        try { pos = actionRef.action.ReadValue<Vector3>(); return true; }
+        catch { return false; }
     }
 
     void SendEvent(string gestureName, string eventType)

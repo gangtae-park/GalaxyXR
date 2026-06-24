@@ -665,10 +665,20 @@ MonoBehaviour:
   recognitionIntervalSeconds: 0.2
   minFramesForRecognition: 20
   pendingReferentName: Pending
+  leftPinchAction: {fileID: -6131295136447488360, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  rightPinchPositionAction: {fileID: -7813013294023911475, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  leftPinchPositionAction: {fileID: -2706128282752906596, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  compareGestureName: Compare
+  compareReadyTimeoutSeconds: 3
+  handsTogetherDistance: 0.03
+  requireBothPinchHeldToComplete: 1
   capturing: 0
   captureElapsed: 0
   bufferFrameCount: 0
   lastRecognized: 
+  compareReady: 0
+  compareReadyElapsed: 0
+  handsDistance: -1
 --- !u!114 &136429831
 MonoBehaviour:
   m_ObjectHideFlags: 0
