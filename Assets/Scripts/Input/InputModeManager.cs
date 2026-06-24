@@ -12,6 +12,8 @@ public class InputModeManager : MonoBehaviour
     public Behaviour[] gestureControllers;
     [Tooltip("Scripts that perform Android STT and route transcript commands.")]
     public Behaviour[] voiceControllers;
+    [Tooltip("Scripts that run object/UI interaction requests.")]
+    public Behaviour[] uiControllers;
     [Tooltip("Scripts that read gaze state. MsgSender should stay enabled as common pipeline.")]
     public Behaviour[] gazeControllers;
 
@@ -92,14 +94,16 @@ public class InputModeManager : MonoBehaviour
     {
         bool gestureEnabled = currentMode == InputMode.GestureOnly;
         bool voiceEnabled = currentMode == InputMode.VoiceOnly || currentMode == InputMode.GazeVoice;
+        bool uiEnabled = currentMode == InputMode.UIOnly;
         bool gazeEnabled = currentMode == InputMode.GazeVoice
             || (currentMode == InputMode.GestureOnly && keepGazeEnabledInGestureOnly)
             || (currentMode == InputMode.VoiceOnly && keepGazeEnabledInVoiceOnly)
             || (currentMode == InputMode.UIOnly && keepGazeEnabledInUIOnly);
 
         SetEnabled(gestureControllers, gestureEnabled);
-        SetEnabled(gazeControllers, gazeEnabled);
         SetEnabled(voiceControllers, voiceEnabled);
+        SetEnabled(uiControllers, uiEnabled);
+        SetEnabled(gazeControllers, gazeEnabled);
         NotifyVoiceManagers(currentMode);
 
         if (disableLegacyAskVoiceController && legacyAskVoiceInputController != null)
@@ -112,7 +116,7 @@ public class InputModeManager : MonoBehaviour
 
         if (verboseLogging)
         {
-            Debug.Log($"[InputModeManager] mode={currentMode} gesture={gestureEnabled} voice={voiceEnabled} gaze={gazeEnabled}");
+            Debug.Log($"[InputModeManager] mode={currentMode} gesture={gestureEnabled} voice={voiceEnabled} ui={uiEnabled} gaze={gazeEnabled}");
         }
     }
 

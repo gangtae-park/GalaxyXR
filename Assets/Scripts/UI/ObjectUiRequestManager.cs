@@ -119,6 +119,8 @@ public class ObjectUiRequestManager : MonoBehaviour
     void OnDisable()
     {
         if (resultReceiver != null) resultReceiver.OnResult -= HandleYoloResult;
+        if (_requestRoutine != null || !string.IsNullOrEmpty(activeRequestId))
+            CancelObjectUiRequest();
     }
 
     [ContextMenu("Begin Object UI Request")]
