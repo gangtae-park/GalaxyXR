@@ -51,6 +51,9 @@ public class VlmResultReceiver : MonoBehaviour
         public string timestamp;
         public string gesture;
         public string model;
+        public string status;   // "ok" | "fail"
+        public string stage;    // "ack" (early gesture-handler fail) | "answer" (post-VLM)
+        public string reason;   // free-form reason text when status == "fail"
         public VlmTargetMeta target_meta;
         public VlmResponse response;
     }

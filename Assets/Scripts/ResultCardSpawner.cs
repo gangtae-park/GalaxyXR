@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /*
@@ -43,6 +44,11 @@ public class ResultCardSpawner : MonoBehaviour
     public GameObject askQuestionCardPrefab;
     public GameObject askResultCardPrefab;
     public GameObject translateResultCardPrefab;
+    public GameObject anchorPinPrefab;
+
+    [Header("Anchor management")]
+    [Tooltip("Maximum simultaneous anchor pins. 0 = unlimited. When exceeded the oldest is destroyed (FIFO).")]
+    public int maxAnchors = 0;
 
     [Header("Spawn position (relative to gaze)")]
     [Tooltip("Distance from the camera along the gaze direction where the card 'anchor' lands.")]
@@ -60,6 +66,7 @@ public class ResultCardSpawner : MonoBehaviour
     private AskQuestionCard _pendingAskQuestion;
     private Vector3 _lastGazeWorldPos;
     private bool _haveGazeSnapshot;
+    private readonly Queue<GameObject> _spawnedAnchors = new Queue<GameObject>();
 
     /// <summary>The AskQuestionCard currently waiting for the user's voice question,
     /// or null if no Ask flow is in progress. Voice recognition components can read
@@ -123,9 +130,20 @@ public class ResultCardSpawner : MonoBehaviour
 
     void HandleResult(VlmResultReceiver.VlmResultPayload payload)
     {
-        if (payload == null || payload.response == null) return;
+        if (payload == null) return;
         string gesture = payload.gesture;
         if (string.IsNullOrEmpty(gesture)) return;
+
+        // Anchor handles fail at the spawner level (status=="fail" -> skip).
+        // The other cards typically still want to render something on fail
+        // (e.g. an error message) so we only fail-gate Anchor here.
+        if (gesture == "Anchor")
+        {
+            SpawnAnchor(payload);
+            return;
+        }
+
+        if (payload.response == null) return;
 
         switch (gesture)
         {
@@ -149,6 +167,72 @@ public class ResultCardSpawner : MonoBehaviour
                 if (verboseLogging)
                     Debug.Log($"[ResultCardSpawner] gesture '{gesture}' has no card handler yet.");
                 break;
+        }
+    }
+
+    // ---------- Anchor ----------
+
+    void SpawnAnchor(VlmResultReceiver.VlmResultPayload payload)
+    {
+        // Python signals a fail (DB mismatch, etc.) via status="fail" / stage="ack"
+        // (network.py:send_gesture_fail_to_unity), or via response.error on legacy
+        // paths. Either way -> skip spawn.
+        bool failed =
+            (payload.status != null && payload.status.Equals("fail", System.StringComparison.OrdinalIgnoreCase))
+            || (payload.response != null && !string.IsNullOrEmpty(payload.response.error));
+        if (failed)
+        {
+            if (verboseLogging)
+            {
+                string why = !string.IsNullOrEmpty(payload.reason)
+                    ? payload.reason
+                    : (payload.response != null ? payload.response.error : "(no reason)");
+                Debug.Log($"[ResultCardSpawner] anchor REJECTED: status={payload.status} stage={payload.stage} reason='{why}' -- no pin spawned.");
+            }
+            return;
+        }
+
+        if (anchorPinPrefab == null)
+        {
+            Debug.LogWarning("[ResultCardSpawner] anchorPinPrefab not assigned.");
+            return;
+        }
+
+        Vector3 pos = ComputeSpawnPosition();
+        Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
+        Quaternion rot = (cam != null)
+            ? Quaternion.LookRotation(cam.transform.forward, Vector3.up)
+            : Quaternion.identity;
+
+        GameObject go = Instantiate(anchorPinPrefab, pos, rot);
+        var pin = go.GetComponent<AnchorPin>();
+        if (pin != null && payload.response != null)
+            pin.SetContent(payload.response.name);
+
+        _spawnedAnchors.Enqueue(go);
+        EnforceMaxAnchors();
+
+        if (verboseLogging)
+            Debug.Log($"[ResultCardSpawner] spawned AnchorPin name='{payload.response?.name}' (total {_spawnedAnchors.Count})");
+    }
+
+    void EnforceMaxAnchors()
+    {
+        if (maxAnchors <= 0) return;
+        while (_spawnedAnchors.Count > maxAnchors)
+        {
+            GameObject oldest = _spawnedAnchors.Dequeue();
+            if (oldest != null) Destroy(oldest);
+        }
+    }
+
+    [ContextMenu("Clear All Anchors")]
+    public void ClearAllAnchors()
+    {
+        while (_spawnedAnchors.Count > 0)
+        {
+            GameObject go = _spawnedAnchors.Dequeue();
+            if (go != null) Destroy(go);
         }
     }
 
