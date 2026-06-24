@@ -33,27 +33,57 @@ public class VlmResultReceiver : MonoBehaviour
     public class VlmTargetMeta
     {
         public string source;
-        public int[] bbox;
+        public float[] bbox;
         public float best_overlap;
         public float best_iou;
         public string class_name;
+        public string label;
         public float conf;
+        public float confidence;
         public float sam_score;
         public int area;
-        public int[] crop_bbox;
-        public int[] gaze_bbox;
+        public float[] crop_bbox;
+        public float[] gaze_bbox;
         public string user_question;
+    }
+
+    [Serializable]
+    public class VlmDetection
+    {
+        public string request_id;
+        public string requestId;
+        public string label;
+        public string class_name;
+        public float confidence;
+        public float conf;
+        public float[] bbox;
+        public int image_width;
+        public int image_height;
+        public int imageWidth;
+        public int imageHeight;
     }
 
     [Serializable]
     public class VlmResultPayload
     {
+        public string request_id;
+        public string requestId;
         public string timestamp;
         public string gesture;
         public string model;
         public string status;   // "ok" | "fail"
         public string stage;    // "ack" (early gesture-handler fail) | "answer" (post-VLM)
         public string reason;   // free-form reason text when status == "fail"
+        public string label;
+        public string class_name;
+        public float confidence;
+        public float conf;
+        public float[] bbox;
+        public int image_width;
+        public int image_height;
+        public int imageWidth;
+        public int imageHeight;
+        public VlmDetection[] detections;
         public VlmTargetMeta target_meta;
         public VlmResponse response;
     }
@@ -61,6 +91,11 @@ public class VlmResultReceiver : MonoBehaviour
     [Header("Network")]
     public int port = 5006;
     public bool verboseLogging = true;
+
+    [Header("Object action menu")]
+    public bool enableObjectActionMenu = true;
+    public bool autoCreateObjectActionMenuSpawner = true;
+    public ObjectActionRadialMenuSpawner objectActionMenuSpawner;
 
     public event Action<VlmResultPayload> OnResult;
     private const string PACKET_PREFIX = "VLM_RESULT";
@@ -80,6 +115,11 @@ public class VlmResultReceiver : MonoBehaviour
         {
             try { OnResult?.Invoke(payload); }
             catch (Exception e) { Debug.LogError($"[Study Log][VlmResultReceiver] OnResult subscriber threw: {e}"); }
+
+            if (enableObjectActionMenu && payload.gesture != "ObjectUI" && PayloadContainsDetectionLikeData(payload))
+            {
+                Debug.LogWarning($"[ObjectActionMenu][WARN] ignoring non-ObjectUI detection-like payload gesture={payload.gesture} request_id={FirstNonEmpty(payload.request_id, payload.requestId)}; route via ResultCardSpawner only.");
+            }
         }
     }
 
@@ -148,5 +188,22 @@ public class VlmResultReceiver : MonoBehaviour
                 Debug.Log($"[Study Log][VlmResultReceiver] received gesture={payload.gesture} name={payload.response?.name}");
             }
         }
+    }
+
+    static bool PayloadContainsDetectionLikeData(VlmResultPayload payload)
+    {
+        if (payload == null) return false;
+        if (payload.detections != null && payload.detections.Length > 0) return true;
+        if (payload.bbox != null && payload.bbox.Length >= 4) return true;
+        if (payload.target_meta != null && payload.target_meta.bbox != null && payload.target_meta.bbox.Length >= 4) return true;
+        return false;
+    }
+
+    static string FirstNonEmpty(params string[] values)
+    {
+        if (values == null) return "";
+        for (int i = 0; i < values.Length; i++)
+            if (!string.IsNullOrEmpty(values[i])) return values[i];
+        return "";
     }
 }

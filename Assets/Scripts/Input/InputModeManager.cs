@@ -18,10 +18,15 @@ public class InputModeManager : MonoBehaviour
     [Header("Gaze policy")]
     public bool keepGazeEnabledInGestureOnly = true;
     public bool keepGazeEnabledInVoiceOnly = false;
+    public bool keepGazeEnabledInUIOnly = true;
 
     [Header("Legacy voice recorder")]
     public AskVoiceInputController legacyAskVoiceInputController;
     public bool disableLegacyAskVoiceController = true;
+
+    [Header("Object UI")]
+    public ObjectUiRequestManager objectUiRequestManager;
+    public bool startObjectUiRequestOnUIOnly = false;
 
     [Header("Logging")]
     public InteractionLogger interactionLogger;
@@ -78,6 +83,9 @@ public class InputModeManager : MonoBehaviour
         ApplyMode();
         OnModeChanged?.Invoke(currentMode);
         interactionLogger?.LogModeChanged(currentMode);
+
+        if (currentMode == InputMode.UIOnly && startObjectUiRequestOnUIOnly)
+            Debug.LogWarning("[InputModeManager] startObjectUiRequestOnUIOnly is deprecated; use an explicit Object UI button/trigger to start capture.");
     }
 
     void ApplyMode()
@@ -86,7 +94,8 @@ public class InputModeManager : MonoBehaviour
         bool voiceEnabled = currentMode == InputMode.VoiceOnly || currentMode == InputMode.GazeVoice;
         bool gazeEnabled = currentMode == InputMode.GazeVoice
             || (currentMode == InputMode.GestureOnly && keepGazeEnabledInGestureOnly)
-            || (currentMode == InputMode.VoiceOnly && keepGazeEnabledInVoiceOnly);
+            || (currentMode == InputMode.VoiceOnly && keepGazeEnabledInVoiceOnly)
+            || (currentMode == InputMode.UIOnly && keepGazeEnabledInUIOnly);
 
         SetEnabled(gestureControllers, gestureEnabled);
         SetEnabled(gazeControllers, gazeEnabled);

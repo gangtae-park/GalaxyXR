@@ -24,6 +24,7 @@ public class TranslateResultCard : MonoBehaviour
 
     void Awake()
     {
+        ARPanelStyle.ApplyTo(gameObject, ARPanelLayoutKind.TranslationCard);
         _destroyAt = Time.time + autoDestroySeconds;
         if (closeButton != null) closeButton.onClick.AddListener(Close);
     }

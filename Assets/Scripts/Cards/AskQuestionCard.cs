@@ -21,6 +21,7 @@ public class AskQuestionCard : MonoBehaviour
 
     void Awake()
     {
+        ARPanelStyle.ApplyTo(gameObject, ARPanelLayoutKind.AskCard);
         if (closeButton != null) closeButton.onClick.AddListener(Close);
         if (statusText != null) statusText.text = listeningMessage;
     }
@@ -34,12 +35,39 @@ public class AskQuestionCard : MonoBehaviour
     {
         ObjectName = name;
         if (titleText != null)
-            titleText.text = string.IsNullOrEmpty(name) ? "Unknown" : name;
+        {
+            string safeName = string.IsNullOrEmpty(name) ? "Unknown" : name;
+            titleText.text = $"Ask about '{safeName}'";
+        }
+        if (statusText != null && string.IsNullOrEmpty(SubmittedQuestion))
+            statusText.text = listeningMessage;
     }
 
     public void NotifyThinking()
     {
         if (statusText != null) statusText.text = thinkingMessage;
+    }
+
+    public void Submit(string question)
+    {
+        SetSubmittedQuestion(question);
+        OnQuestionSubmitted?.Invoke(SubmittedQuestion);
+        NotifyThinking();
+    }
+
+    public void SubmitLocal(string question)
+    {
+        SetSubmittedQuestion(question);
+        NotifyThinking();
+    }
+
+    void SetSubmittedQuestion(string question)
+    {
+        SubmittedQuestion = question ?? "";
+        if (statusText != null)
+            statusText.text = string.IsNullOrWhiteSpace(SubmittedQuestion)
+                ? thinkingMessage
+                : SubmittedQuestion;
     }
 
     public void Close()

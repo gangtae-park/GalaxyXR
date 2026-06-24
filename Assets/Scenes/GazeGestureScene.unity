@@ -232,7 +232,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
@@ -6729,6 +6729,7 @@ GameObject:
   - component: {fileID: 1110963238}
   - component: {fileID: 1110963237}
   - component: {fileID: 1110963239}
+  - component: {fileID: 1110963240}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -6763,12 +6764,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6b465085260f84672acc81ced568d41b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MsgSender
-  serverIP: 192.168.0.8
+  serverIP: 192.168.0.3
   port: 5005
   eyeGazeReader: {fileID: 198504609}
   gazeRotationAction: {fileID: -5930349909990434036, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   gazeTrackingStateAction: {fileID: 2069149553511882089, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   sendHz: 30
+  captureContextRegistry: {fileID: 0}
+  autoResolveCaptureContextRegistry: 1
+  registerCaptureContextOnGestureEvents: 1
+  registerCaptureContextOnTextCommands: 1
+  appendRequestIdToOutgoingPackets: 0
+  captureImageWidth: 0
+  captureImageHeight: 0
+  captureFallbackDistance: 1.2
 --- !u!114 &1110963237
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6792,6 +6801,22 @@ MonoBehaviour:
   translateResultCardPrefab: {fileID: 2818028396226705512, guid: c21f37f7d63cd4a8ca61d2cc3eba682a, type: 3}
   anchorPinPrefab: {fileID: 1960211650334644200, guid: 16643e303c19a4ab38711739e648e72e, type: 3}
   maxAnchors: 0
+  applyReferencePanelStyle: 1
+  panelBackgroundColor: {r: 0.2, g: 0.45, b: 1, a: 0.55}
+  panelBorderColor: {r: 0.72, g: 0.88, b: 1, a: 0.78}
+  panelTextColor: {r: 1, g: 1, b: 1, a: 1}
+  panelSecondaryTextColor: {r: 0.92, g: 0.97, b: 1, a: 0.92}
+  infoPanelSize: {x: 380, y: 160}
+  askPanelSize: {x: 430, y: 150}
+  answerPanelSize: {x: 500, y: 240}
+  comparePanelSize: {x: 440, y: 190}
+  translationPanelSize: {x: 380, y: 150}
+  statusPanelSize: {x: 320, y: 95}
+  sensorPanelSize: {x: 350, y: 190}
+  showTargetBoundingBox: 1
+  targetBoundingBoxSize: {x: 0.45, y: 0.35}
+  targetBoundingBoxColor: {r: 0.45, g: 0.7, b: 1, a: 0.9}
+  targetBoundingBoxLineWidth: 0.006
   gazeProjectionDistance: 0.8
   horizontalOffset: 0.12
   verticalOffset: 0.12
@@ -6811,6 +6836,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::VlmResultReceiver
   port: 5006
   verboseLogging: 1
+  enableObjectActionMenu: 1
+  autoCreateObjectActionMenuSpawner: 1
+  objectActionMenuSpawner: {fileID: 0}
 --- !u!114 &1110963239
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6825,7 +6853,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::AskVoiceInputController
   allowLegacyRecording: 0
   spawner: {fileID: 1110963237}
-  voiceServerUrl: http://192.168.0.8:5007/ask_voice
+  voiceServerUrl: http://192.168.0.3:5007/ask_voice
   sampleRate: 16000
   maxRecordingSeconds: 15
   silenceThreshold: 0.012
@@ -6834,6 +6862,37 @@ MonoBehaviour:
   currentRms: 0
   hasDetectedVoice: 0
   recordedSeconds: 0
+--- !u!114 &1110963240
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1110963234}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b5e8d61c9b2047db83b8b39b7ab90e4f, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::ObjectUiRequestManager
+  msgSender: {fileID: 1110963236}
+  resultReceiver: {fileID: 1110963238}
+  radialMenuSpawner: {fileID: 0}
+  eyeGazeReader: {fileID: 198504609}
+  referenceCamera: {fileID: 1948693200}
+  objectUiServerUrl: http://192.168.0.3:5007/object_ui
+  captureDelaySeconds: 3
+  jpegQuality: 65
+  autoResolveReferences: 1
+  verboseLogging: 1
+  objectUiContextMaxAgeSeconds: 120
+  preferGazeNearestTarget: 1
+  preferScreenCenterWhenGazeUnavailable: 1
+  spawnAtSearchPanelFallback: 1
+  fallbackProjectionDistance: 1.2
+  fallbackHorizontalOffset: 0.25
+  fallbackVerticalOffset: 0.15
+  state: 0
+  activeRequestId:
 --- !u!1 &1120256384
 GameObject:
   m_ObjectHideFlags: 0
@@ -6864,7 +6923,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7951c64acb0fa62458bf30a60089fe2d, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: 
   m_IgnoreReversedGraphics: 0
   m_CheckFor2DOcclusion: 0
@@ -6883,7 +6942,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dc42784cf147c0c48a680349fa168899, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: 
   m_IgnoreReversedGraphics: 1
   m_BlockingObjects: 0
@@ -6900,7 +6959,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: 
   m_UiScaleMode: 0
   m_ReferencePixelsPerUnit: 100
@@ -7042,7 +7101,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 306cc8c2b49d7114eaa3623786fc2126, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.LayoutElement
   m_IgnoreLayout: 0
   m_MinWidth: -1
@@ -7062,7 +7121,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 30649d3a9faa99c48a7b1166b86bf2a0, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.HorizontalLayoutGroup
   m_Padding:
     m_Left: 0
@@ -13885,6 +13944,246 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: cc0d6bd3aca3b5d4a986e27ce112e071, type: 3}
+--- !u!1 &6614100000000000000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6614100000000000001}
+  - component: {fileID: 6614100000000000002}
+  - component: {fileID: 6614100000000000003}
+  - component: {fileID: 6614100000000000004}
+  - component: {fileID: 6614100000000000005}
+  - component: {fileID: 6614100000000000008}
+  - component: {fileID: 6614100000000000009}
+  - component: {fileID: 6614100000000000010}
+  - component: {fileID: 6614100000000000011}
+  - component: {fileID: 6614100000000000012}
+  m_Layer: 0
+  m_Name: InputModeManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6614100000000000001
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6614100000000000000}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &6614100000000000002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6614100000000000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4d8938b9bf744913ac20f08f8cb295df, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::InputModeManager
+  initialMode: 0
+  applyInitialModeOnStart: 1
+  gestureControllers:
+  - {fileID: 136429830}
+  voiceControllers:
+  - {fileID: 6614100000000000005}
+  - {fileID: 6614100000000000008}
+  - {fileID: 6614100000000000012}
+  gazeControllers:
+  - {fileID: 198504609}
+  keepGazeEnabledInGestureOnly: 1
+  keepGazeEnabledInVoiceOnly: 0
+  keepGazeEnabledInUIOnly: 1
+  legacyAskVoiceInputController: {fileID: 1110963239}
+  disableLegacyAskVoiceController: 1
+  objectUiRequestManager: {fileID: 1110963240}
+  startObjectUiRequestOnUIOnly: 0
+  interactionLogger: {fileID: 6614100000000000004}
+  verboseLogging: 1
+  currentMode: 0
+--- !u!114 &6614100000000000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6614100000000000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c4011d628cb64af0a9c77f94b35b67aa, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::RuntimeAudioPermissionRequester
+  requestOnStart: 1
+  verboseLogging: 1
+--- !u!114 &6614100000000000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6614100000000000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d22a61f704664d33a67a8d28eb7af178, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::InteractionLogger
+  logToConsole: 1
+  appendCsv: 0
+  csvFileName: interaction_log.csv
+  logCsvPathOnStart: 1
+--- !u!114 &6614100000000000005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6614100000000000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a87fcb3b5bbf4a199817e55902be54a3, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::AndroidSpeechRecognizerBridge
+  language: ko-KR
+  languagePreference: ko-KR
+  prompt: "\uD55C\uAD6D\uC5B4\uB85C \uB9D0\uC500\uD558\uC138\uC694"
+  maxResults: 1
+  enablePartialResults: 1
+  preferOfflineRecognition: 0
+  enableEditorMockTranscript: 1
+  editorMockTranscript: "\uC774\uAC70 \uBB50\uC57C"
+  editorMockDelaySeconds: 0.25
+  verboseLogging: 1
+  recognitionAvailable: 0
+  onDeviceRecognitionAvailable: 0
+  isListening: 0
+--- !u!114 &6614100000000000008
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6614100000000000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b43fb730ead747b89c260ec2a686bbd8, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::VoiceInputManager
+  currentMode: 2
+  speechBridge: {fileID: 6614100000000000005}
+  msgSender: {fileID: 1110963236}
+  permissionRequester: {fileID: 6614100000000000003}
+  interactionLogger: {fileID: 6614100000000000004}
+  resultCardSpawner: {fileID: 0}
+  listenTimeoutSeconds: 10
+  autoResolveReferences: 1
+  verboseLogging: 1
+  sendVoiceCommandPacket: 1
+  routePendingAskCard: 1
+  waitingForFinalTranscript: 0
+  lastTranscript:
+--- !u!114 &6614100000000000009
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6614100000000000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 501cdb6010f94b84bd9d793764d7e266, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::InputModeDebugPanel
+  modeManager: {fileID: 6614100000000000002}
+  voiceInputManager: {fileID: 6614100000000000008}
+  enableKeyboardShortcuts: 1
+--- !u!114 &6614100000000000010
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6614100000000000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c22e906d9e604d4fa04d75b7f54277b1, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::VoiceStatusPanel
+  voiceInputManager: {fileID: 6614100000000000008}
+  referenceCamera: {fileID: 1948693200}
+  distanceFromCamera: 0.9
+  verticalOffset: -0.22
+  horizontalOffset: 0
+  panelSize: {x: 420, y: 110}
+  worldScale: 0.0012
+  listeningMessage: Listening... speak now
+  partialPrefix: 'Heard: '
+  finalPrefix: 'Transcript: '
+  errorPrefix: 'Voice error: '
+  hideAfterFinalSeconds: 1.5
+  hideAfterErrorSeconds: 2.5
+  backgroundColor: {r: 0.02, g: 0.02, b: 0.02, a: 0.86}
+  listeningColor: {r: 0.38, g: 0.82, b: 1, a: 1}
+  finalColor: {r: 0.75, g: 1, b: 0.75, a: 1}
+  errorColor: {r: 1, g: 0.55, b: 0.55, a: 1}
+  fontSize: 34
+  messageFont: {fileID: 11400000, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}
+--- !u!114 &6614100000000000011
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6614100000000000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6d88da6c99604bcf89842e62a37d3492, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::InputModeDropdownBinder
+  inputModeDropdown: {fileID: 1186549191}
+  modeManager: {fileID: 6614100000000000002}
+  voiceInputManager: {fileID: 6614100000000000008}
+  syncLabelsOnStart: 1
+  gestureOnlyLabel: Gesture input
+  uiInteractionLabel: UI Interaction
+  voiceOnlyLabel: Voice input
+  startListeningWhenVoiceModeSelected: 0
+--- !u!114 &6614100000000000012
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6614100000000000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 432333aad5564efd8ad0591625f6bdfd, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::VoiceHandTrigger
+  voiceInputManager: {fileID: 6614100000000000008}
+  modeManager: {fileID: 6614100000000000002}
+  triggerAction: {fileID: 0}
+  triggerThreshold: 0.85
+  holdSeconds: 0.65
+  cooldownSeconds: 1.2
+  requireVoiceMode: 1
+  useFallbackLeftHandPinch: 1
+  verboseLogging: 1
+  holdTime: 0
 --- !u!1001 &6689389173002939780
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -14184,241 +14483,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9085046f02f69544eb97fd06b6048fe2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
---- !u!1 &6614100000000000000
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 6614100000000000001}
-  - component: {fileID: 6614100000000000002}
-  - component: {fileID: 6614100000000000003}
-  - component: {fileID: 6614100000000000004}
-  - component: {fileID: 6614100000000000005}
-  - component: {fileID: 6614100000000000008}
-  - component: {fileID: 6614100000000000009}
-  - component: {fileID: 6614100000000000010}
-  - component: {fileID: 6614100000000000011}
-  - component: {fileID: 6614100000000000012}
-  m_Layer: 0
-  m_Name: InputModeManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &6614100000000000001
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6614100000000000000}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &6614100000000000002
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6614100000000000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4d8938b9bf744913ac20f08f8cb295df, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::InputModeManager
-  initialMode: 0
-  applyInitialModeOnStart: 1
-  gestureControllers:
-  - {fileID: 136429830}
-  voiceControllers:
-  - {fileID: 6614100000000000005}
-  - {fileID: 6614100000000000008}
-  - {fileID: 6614100000000000012}
-  gazeControllers:
-  - {fileID: 198504609}
-  keepGazeEnabledInGestureOnly: 1
-  keepGazeEnabledInVoiceOnly: 0
-  legacyAskVoiceInputController: {fileID: 1110963239}
-  disableLegacyAskVoiceController: 1
-  interactionLogger: {fileID: 6614100000000000004}
-  verboseLogging: 1
-  currentMode: 0
---- !u!114 &6614100000000000003
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6614100000000000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c4011d628cb64af0a9c77f94b35b67aa, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::RuntimeAudioPermissionRequester
-  requestOnStart: 1
-  verboseLogging: 1
---- !u!114 &6614100000000000004
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6614100000000000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d22a61f704664d33a67a8d28eb7af178, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::InteractionLogger
-  logToConsole: 1
-  appendCsv: 0
-  csvFileName: interaction_log.csv
-  logCsvPathOnStart: 1
---- !u!114 &6614100000000000005
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6614100000000000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a87fcb3b5bbf4a199817e55902be54a3, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::AndroidSpeechRecognizerBridge
-  language: ko-KR
-  languagePreference: ko-KR
-  prompt: "\uD55C\uAD6D\uC5B4\uB85C \uB9D0\uC500\uD558\uC138\uC694"
-  maxResults: 1
-  enablePartialResults: 1
-  preferOfflineRecognition: 0
-  enableEditorMockTranscript: 1
-  editorMockTranscript: "\uC774\uAC70 \uBB50\uC57C"
-  editorMockDelaySeconds: 0.25
-  verboseLogging: 1
-  recognitionAvailable: 0
-  onDeviceRecognitionAvailable: 0
-  isListening: 0
---- !u!114 &6614100000000000008
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6614100000000000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b43fb730ead747b89c260ec2a686bbd8, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::VoiceInputManager
-  currentMode: 2
-  speechBridge: {fileID: 6614100000000000005}
-  msgSender: {fileID: 1110963236}
-  permissionRequester: {fileID: 6614100000000000003}
-  interactionLogger: {fileID: 6614100000000000004}
-  listenTimeoutSeconds: 10
-  autoResolveReferences: 1
-  verboseLogging: 1
-  sendVoiceCommandPacket: 1
-  waitingForFinalTranscript: 0
-  lastTranscript:
---- !u!114 &6614100000000000009
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6614100000000000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 501cdb6010f94b84bd9d793764d7e266, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::InputModeDebugPanel
-  modeManager: {fileID: 6614100000000000002}
-  voiceInputManager: {fileID: 6614100000000000008}
-  enableKeyboardShortcuts: 1
---- !u!114 &6614100000000000010
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6614100000000000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c22e906d9e604d4fa04d75b7f54277b1, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::VoiceStatusPanel
-  voiceInputManager: {fileID: 6614100000000000008}
-  referenceCamera: {fileID: 1948693200}
-  distanceFromCamera: 0.9
-  verticalOffset: -0.22
-  horizontalOffset: 0
-  panelSize: {x: 420, y: 110}
-  worldScale: 0.0012
-  listeningMessage: Listening... speak now
-  partialPrefix: 'Heard: '
-  finalPrefix: 'Transcript: '
-  errorPrefix: 'Voice error: '
-  hideAfterFinalSeconds: 1.5
-  hideAfterErrorSeconds: 2.5
-  backgroundColor: {r: 0.02, g: 0.02, b: 0.02, a: 0.86}
-  listeningColor: {r: 0.38, g: 0.82, b: 1, a: 1}
-  finalColor: {r: 0.75, g: 1, b: 0.75, a: 1}
-  errorColor: {r: 1, g: 0.55, b: 0.55, a: 1}
-  fontSize: 34
-  messageFont: {fileID: 11400000, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}
---- !u!114 &6614100000000000011
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6614100000000000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6d88da6c99604bcf89842e62a37d3492, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::InputModeDropdownBinder
-  inputModeDropdown: {fileID: 1186549191}
-  modeManager: {fileID: 6614100000000000002}
-  voiceInputManager: {fileID: 6614100000000000008}
-  syncLabelsOnStart: 1
-  gestureOnlyLabel: Gesture input
-  uiInteractionLabel: UI Interaction
-  voiceOnlyLabel: Voice input
-  startListeningWhenVoiceModeSelected: 0
---- !u!114 &6614100000000000012
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6614100000000000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 432333aad5564efd8ad0591625f6bdfd, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::VoiceHandTrigger
-  voiceInputManager: {fileID: 6614100000000000008}
-  modeManager: {fileID: 6614100000000000002}
-  triggerAction: {fileID: 0}
-  triggerThreshold: 0.85
-  holdSeconds: 0.65
-  cooldownSeconds: 1.2
-  requireVoiceMode: 1
-  useFallbackLeftHandPinch: 1
-  verboseLogging: 1
-  holdTime: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

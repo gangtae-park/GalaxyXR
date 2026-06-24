@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 
 /*
@@ -24,7 +25,8 @@ Responsibilities:
        "Ask"  + with answer-> destroy any AskQuestionCard, spawn AskResultCard
        "VoiceAsk"         -> treated as "Ask" for compatibility with voice-side servers
                               with (name, question, answer)
-       (other gestures)    -> hook later (Translate, Compare, ...)
+       other gestures     -> spawn compact generic cards using the mapping in
+                              HandleResult without changing backend semantics
 
   3) replacePreviousCard = true ensures only one card is alive at a time, so a
      new gesture cleanly replaces the previous result on screen.
@@ -50,6 +52,24 @@ public class ResultCardSpawner : MonoBehaviour
     [Tooltip("Maximum simultaneous anchor pins. 0 = unlimited. When exceeded the oldest is destroyed (FIFO).")]
     public int maxAnchors = 0;
 
+    [Header("Reference AR style")]
+    public bool applyReferencePanelStyle = true;
+    public Color panelBackgroundColor = new Color(0.20f, 0.45f, 1.0f, 0.55f);
+    public Color panelBorderColor = new Color(0.72f, 0.88f, 1.0f, 0.78f);
+    public Color panelTextColor = Color.white;
+    public Color panelSecondaryTextColor = new Color(0.92f, 0.97f, 1.0f, 0.92f);
+    public Vector2 infoPanelSize = new Vector2(380f, 160f);
+    public Vector2 askPanelSize = new Vector2(430f, 150f);
+    public Vector2 answerPanelSize = new Vector2(500f, 240f);
+    public Vector2 comparePanelSize = new Vector2(440f, 190f);
+    public Vector2 translationPanelSize = new Vector2(380f, 150f);
+    public Vector2 statusPanelSize = new Vector2(320f, 95f);
+    public Vector2 sensorPanelSize = new Vector2(350f, 190f);
+    public bool showTargetBoundingBox = true;
+    public Vector2 targetBoundingBoxSize = new Vector2(0.45f, 0.35f);
+    public Color targetBoundingBoxColor = new Color(0.45f, 0.70f, 1.0f, 0.9f);
+    public float targetBoundingBoxLineWidth = 0.006f;
+
     [Header("Spawn position (relative to gaze)")]
     [Tooltip("Distance from the camera along the gaze direction where the card 'anchor' lands.")]
     public float gazeProjectionDistance = 1.2f;
@@ -63,6 +83,7 @@ public class ResultCardSpawner : MonoBehaviour
     public bool verboseLogging = true;
 
     private GameObject _currentCard;
+    private ARBoundingBoxVisual _currentTargetBounds;
     private AskQuestionCard _pendingAskQuestion;
     private Vector3 _lastGazeWorldPos;
     private bool _haveGazeSnapshot;
@@ -133,6 +154,7 @@ public class ResultCardSpawner : MonoBehaviour
         if (payload == null) return;
         string gesture = payload.gesture;
         if (string.IsNullOrEmpty(gesture)) return;
+        if (gesture == "ObjectUI") return;
 
         // Anchor handles fail at the spawner level (status=="fail" -> skip).
         // The other cards typically still want to render something on fail
@@ -161,6 +183,39 @@ public class ResultCardSpawner : MonoBehaviour
 
             case "Translate":
                 SpawnTranslateResult(payload);
+                break;
+
+            case "Compare":
+                SpawnGenericResult(payload, ARPanelLayoutKind.CompareCard);
+                break;
+
+            case "Capture":
+                SpawnGenericResult(payload, ARPanelLayoutKind.StatusCard);
+                break;
+
+            case "Save":
+            case "Store":
+                SpawnGenericResult(payload, ARPanelLayoutKind.NoteCard);
+                break;
+
+            case "Mark":
+            case "Anchor":
+                SpawnGenericResult(payload, ARPanelLayoutKind.AnchorCard);
+                break;
+
+            case "Activate":
+            case "Deactivate":
+                SpawnGenericResult(payload, ARPanelLayoutKind.StatusCard);
+                break;
+
+            case "Set":
+            case "Change":
+                SpawnGenericResult(payload, ARPanelLayoutKind.ControlCard);
+                break;
+
+            case "Read":
+            case "Sense":
+                SpawnGenericResult(payload, ARPanelLayoutKind.SensorCard);
                 break;
 
             default:
@@ -248,10 +303,12 @@ public class ResultCardSpawner : MonoBehaviour
         ReplaceCurrentCard();
 
         GameObject go = Instantiate(translateResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+        ApplyPanelLayout(go, ARPanelLayoutKind.TranslationCard);
         var card = go.GetComponent<TranslateResultCard>();
         if (card != null)
             card.SetContent(payload.response.translation);
         _currentCard = go;
+        ShowTargetBoundsIfAvailable(payload);
         if (verboseLogging)
             Debug.Log($"[ResultCardSpawner] spawned TranslateResultCard translation='{payload.response.translation}'");
     }
@@ -268,10 +325,12 @@ public class ResultCardSpawner : MonoBehaviour
         ReplaceCurrentCard();
 
         GameObject go = Instantiate(searchResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+        ApplyPanelLayout(go, ARPanelLayoutKind.InfoCard);
         var card = go.GetComponent<SearchResultCard>();
         if (card != null)
             card.SetContent(payload.response.name, payload.response.result_search);
         _currentCard = go;
+        ShowTargetBoundsIfAvailable(payload);
         if (verboseLogging)
             Debug.Log($"[ResultCardSpawner] spawned SearchResultCard name='{payload.response.name}'");
     }
@@ -295,6 +354,7 @@ public class ResultCardSpawner : MonoBehaviour
         ReplaceCurrentCard();
 
         GameObject go = Instantiate(askQuestionCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+        ApplyPanelLayout(go, ARPanelLayoutKind.AskCard);
         var card = go.GetComponent<AskQuestionCard>();
         if (card != null)
         {
@@ -303,6 +363,7 @@ public class ResultCardSpawner : MonoBehaviour
             _pendingAskQuestion = card;
         }
         _currentCard = go;
+        ShowTargetBoundsIfAvailable(payload);
         if (verboseLogging)
             Debug.Log($"[ResultCardSpawner] spawned AskQuestionCard name='{payload.response.name}'");
     }
@@ -339,12 +400,120 @@ public class ResultCardSpawner : MonoBehaviour
         _pendingAskQuestion = null;
 
         GameObject go = Instantiate(askResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+        ApplyPanelLayout(go, ARPanelLayoutKind.AnswerCard);
         var card = go.GetComponent<AskResultCard>();
         if (card != null)
             card.SetContent(payload.response.name, question, payload.response.answer);
         _currentCard = go;
         if (verboseLogging)
             Debug.Log($"[ResultCardSpawner] spawned AskResultCard name='{payload.response.name}'");
+    }
+
+    // ---------- Generic mapped panels ----------
+
+    void SpawnGenericResult(VlmResultReceiver.VlmResultPayload payload, ARPanelLayoutKind layoutKind)
+    {
+        if (searchResultCardPrefab == null)
+        {
+            Debug.LogWarning("[ResultCardSpawner] generic panel fallback requires searchResultCardPrefab.");
+            return;
+        }
+        ReplaceCurrentCard();
+
+        GameObject go = Instantiate(searchResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+        ApplyPanelLayout(go, layoutKind);
+        var card = go.GetComponent<SearchResultCard>();
+        if (card != null)
+            card.SetContent(BuildGenericTitle(payload, layoutKind), BuildGenericBody(payload, layoutKind));
+        _currentCard = go;
+
+        if (layoutKind == ARPanelLayoutKind.CompareCard || layoutKind == ARPanelLayoutKind.SensorCard)
+            ShowTargetBoundsIfAvailable(payload);
+
+        if (verboseLogging)
+            Debug.Log($"[ResultCardSpawner] spawned generic {layoutKind} for gesture='{payload.gesture}'");
+    }
+
+    static string BuildGenericTitle(VlmResultReceiver.VlmResultPayload payload, ARPanelLayoutKind layoutKind)
+    {
+        string name = payload != null && payload.response != null ? payload.response.name : "";
+        if (!string.IsNullOrEmpty(name)) return name;
+
+        string gesture = payload != null ? payload.gesture : "";
+        switch (layoutKind)
+        {
+            case ARPanelLayoutKind.CompareCard: return "Compare";
+            case ARPanelLayoutKind.NoteCard: return "Note";
+            case ARPanelLayoutKind.AnchorCard: return "Marker anchored";
+            case ARPanelLayoutKind.SensorCard: return "Read / Sense";
+            case ARPanelLayoutKind.ControlCard: return "Set / Change";
+            case ARPanelLayoutKind.StatusCard:
+                return string.IsNullOrEmpty(gesture) ? "Status" : gesture;
+            default:
+                return string.IsNullOrEmpty(gesture) ? "Status" : gesture;
+        }
+    }
+
+    static string BuildGenericBody(VlmResultReceiver.VlmResultPayload payload, ARPanelLayoutKind layoutKind)
+    {
+        VlmResultReceiver.VlmResponse response = payload != null ? payload.response : null;
+        string best = FirstNonEmpty(
+            response != null ? response.answer : "",
+            response != null ? response.info : "",
+            response != null ? response.description : "",
+            response != null ? response.result_search : "",
+            response != null ? response.translation : "",
+            response != null ? response.raw : ""
+        );
+
+        if (!string.IsNullOrEmpty(best))
+            return layoutKind == ARPanelLayoutKind.CompareCard ? CompactPlainText(best) : best;
+
+        string gesture = payload != null ? payload.gesture : "";
+        switch (layoutKind)
+        {
+            case ARPanelLayoutKind.StatusCard:
+                if (gesture == "Activate") return "Activated";
+                if (gesture == "Deactivate") return "Deactivated";
+                return "Image captured and saved";
+            case ARPanelLayoutKind.NoteCard:
+                return "Saved memo or extracted information will appear here.";
+            case ARPanelLayoutKind.AnchorCard:
+                return "Marker anchored";
+            case ARPanelLayoutKind.SensorCard:
+                return "CO2      --\nHCHO     --\nTVOC     --\nTEMP     --\nHUMI     --";
+            case ARPanelLayoutKind.ControlCard:
+                return "Control panel placeholder";
+            case ARPanelLayoutKind.CompareCard:
+                return "Comparison result unavailable.";
+            default:
+                return "";
+        }
+    }
+
+    static string CompactPlainText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        string[] lines = text.Split('\n');
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i].Trim();
+            if (line.Length == 0) continue;
+            if (builder.Length > 0) builder.Append('\n');
+            builder.Append(line);
+        }
+        return builder.ToString();
+    }
+
+    static string FirstNonEmpty(params string[] values)
+    {
+        if (values == null) return "";
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (!string.IsNullOrWhiteSpace(values[i])) return values[i];
+        }
+        return "";
     }
 
     // ---------- helpers ----------
@@ -362,5 +531,60 @@ public class ResultCardSpawner : MonoBehaviour
             Destroy(_currentCard);
             _currentCard = null;
         }
+        if (_currentTargetBounds != null)
+        {
+            Destroy(_currentTargetBounds.gameObject);
+            _currentTargetBounds = null;
+        }
+    }
+
+    void ApplyPanelLayout(GameObject go, ARPanelLayoutKind layoutKind)
+    {
+        if (!applyReferencePanelStyle || go == null) return;
+        ARPanelStyle style = ARPanelStyle.ApplyTo(go, layoutKind);
+        if (style == null) return;
+
+        style.backgroundColor = panelBackgroundColor;
+        style.borderColor = panelBorderColor;
+        style.textColor = panelTextColor;
+        style.secondaryTextColor = panelSecondaryTextColor;
+        style.infoSize = infoPanelSize;
+        style.askSize = askPanelSize;
+        style.answerSize = answerPanelSize;
+        style.compareSize = comparePanelSize;
+        style.translationSize = translationPanelSize;
+        style.statusSize = statusPanelSize;
+        style.sensorSize = sensorPanelSize;
+        style.Apply();
+    }
+
+    void ShowTargetBoundsIfAvailable(VlmResultReceiver.VlmResultPayload payload)
+    {
+        if (!showTargetBoundingBox || payload == null || !HasTargetBounds(payload.target_meta)) return;
+
+        if (_currentTargetBounds != null)
+            Destroy(_currentTargetBounds.gameObject);
+
+        Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
+        Vector3 center = _haveGazeSnapshot ? _lastGazeWorldPos : ComputeGazeWorldPosition();
+        _currentTargetBounds = ARBoundingBoxVisual.Create(
+            center,
+            cam,
+            targetBoundingBoxSize,
+            targetBoundingBoxColor,
+            targetBoundingBoxLineWidth,
+            30f
+        );
+    }
+
+    static bool HasTargetBounds(VlmResultReceiver.VlmTargetMeta meta)
+    {
+        if (meta == null) return false;
+        return HasBox(meta.bbox) || HasBox(meta.crop_bbox) || HasBox(meta.gaze_bbox);
+    }
+
+    static bool HasBox(float[] box)
+    {
+        return box != null && box.Length >= 4;
     }
 }

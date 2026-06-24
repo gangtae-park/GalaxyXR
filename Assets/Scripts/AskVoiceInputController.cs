@@ -45,7 +45,7 @@ public class AskVoiceInputController : MonoBehaviour
     public ResultCardSpawner spawner;
 
     [Header("Network")]
-    public string voiceServerUrl = "http://192.168.0.8:5007/ask_voice";
+    public string voiceServerUrl = "http://192.168.0.3:5007/ask_voice";
 
     [Header("Microphone")]
     public int sampleRate = 16000;
