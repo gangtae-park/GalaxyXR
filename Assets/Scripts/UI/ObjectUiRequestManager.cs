@@ -55,14 +55,6 @@ public class ObjectUiRequestManager : MonoBehaviour
     public bool verboseLogging = true;
     public float objectUiContextMaxAgeSeconds = 120f;
 
-    [Header("Selection")]
-    public bool preferGazeNearestTarget = true;
-    public bool preferScreenCenterWhenGazeUnavailable = true;
-    public bool spawnAtSearchPanelFallback = true;
-    public float fallbackProjectionDistance = 1.2f;
-    public float fallbackHorizontalOffset = 0.25f;
-    public float fallbackVerticalOffset = 0.15f;
-
     [Header("Status")]
     [SerializeField] private RequestState state = RequestState.Idle;
     [SerializeField] private string activeRequestId = "";
@@ -137,6 +129,7 @@ public class ObjectUiRequestManager : MonoBehaviour
 
         activeRequestId = Guid.NewGuid().ToString("N");
         state = RequestState.WaitingForSceneCapture;
+        Debug.Log("[UIInteraction] Started");
         Debug.Log($"[OBJECT_UI] Button pressed request_id={activeRequestId}");
         Debug.Log($"[OBJECT_UI] Waiting {captureDelaySeconds:F1}s before capture request_id={activeRequestId}");
         _requestRoutine = StartCoroutine(RequestRoutine(activeRequestId));
@@ -151,6 +144,7 @@ public class ObjectUiRequestManager : MonoBehaviour
         }
         Debug.Log($"[OBJECT_UI] cancelled request_id={activeRequestId}");
         if (bubbleSpawner != null) bubbleSpawner.ClearBubbles();
+        Debug.Log("[UIInteraction] Cleared bubbles");
         activeRequestId = "";
         state = RequestState.Idle;
         _hasActiveCapturePose = false;
@@ -301,6 +295,7 @@ public class ObjectUiRequestManager : MonoBehaviour
             if (request.result == UnityWebRequest.Result.Success)
             {
                 state = RequestState.WaitingForYoloResponse;
+                Debug.Log("[UIInteraction] Image sent to YOLO");
                 Debug.Log($"[OBJECT_UI] YOLO request accepted request_id={payload.request_id} code={request.responseCode} body={request.downloadHandler.text}");
             }
             else
@@ -330,12 +325,13 @@ public class ObjectUiRequestManager : MonoBehaviour
         }
 
         int count = payload.detections != null ? payload.detections.Length : 0;
+        Debug.Log($"[UIInteraction] YOLO result received: count = {count}");
         Debug.Log($"[OBJECT_UI] YOLO detections received: {count}");
         Debug.Log($"[OBJECT_UI] YOLO response request_id={responseRequestId} detections={count}");
         if (count == 0)
         {
-            Debug.LogWarning("[OBJECT_UI][WARN] no detections; using search-panel fallback position");
-            SpawnSearchPanelFallback(responseRequestId, "no_detections");
+            Debug.LogWarning("[OBJECT_UI][WARN] no detections; UI interaction panel will stay closed.");
+            Debug.Log("[UIInteraction] Blocked auto panel open before bubble selection");
             FinishRequest();
             return;
         }
@@ -344,6 +340,7 @@ public class ObjectUiRequestManager : MonoBehaviour
         if (spawner == null)
         {
             Debug.LogWarning("[OBJECT_UI][WARN] bubble spawner unavailable; object bubbles cannot be shown.");
+            Debug.Log("[UIInteraction] Blocked auto panel open before bubble selection");
             FinishRequest();
             return;
         }
@@ -368,11 +365,12 @@ public class ObjectUiRequestManager : MonoBehaviour
             Debug.Log($"[OBJECT_UI] detection[{i}] class={detection.label} conf={detection.confidence:F3} bbox=[{detection.x1:F1},{detection.y1:F1},{detection.x2:F1},{detection.y2:F1}] center_px=({center.x:F1},{center.y:F1}) normalized=({normalized.x:F3},{normalized.y:F3})");
         }
 
+        Debug.Log("[UIInteraction] Showing object bubbles");
         int bubbleCount = spawner.ShowBubbles(validDetections.ToArray(), payload, responseRequestId);
         if (bubbleCount <= 0)
         {
-            Debug.LogWarning("[OBJECT_UI][WARN] no bubbles spawned; using search-panel fallback position");
-            SpawnSearchPanelFallback(responseRequestId, "bubble_spawn_failed");
+            Debug.LogWarning("[OBJECT_UI][WARN] no bubbles spawned; UI interaction panel will stay closed.");
+            Debug.Log("[UIInteraction] Blocked auto panel open before bubble selection");
         }
         else
         {
@@ -381,125 +379,6 @@ public class ObjectUiRequestManager : MonoBehaviour
 
         // The server request is complete. The saved requestId is kept inside each bubble for later click handling.
         FinishRequest();
-    }
-
-    void SpawnSearchPanelFallback(string requestId, string reason)
-    {
-        if (string.IsNullOrEmpty(requestId))
-        {
-            Debug.LogWarning($"[OBJECT_UI][WARN] fallback radial UI ignored because request_id is empty. reason={reason}");
-            return;
-        }
-
-        if (!spawnAtSearchPanelFallback)
-        {
-            Debug.LogWarning($"[OBJECT_UI][WARN] fallback disabled reason={reason} request_id={requestId}");
-            return;
-        }
-
-        ObjectActionRadialMenuSpawner spawner = ResolveRadialMenuSpawner();
-        if (spawner == null)
-        {
-            Debug.LogWarning($"[OBJECT_UI][WARN] radial menu spawner unavailable for fallback reason={reason} request_id={requestId}");
-            return;
-        }
-
-        Vector3 position = ComputeSearchPanelFallbackPosition();
-        spawner.SpawnFallback(position, requestId, "view target");
-        Debug.Log($"[OBJECT_UI] fallback_spawn reason={reason} request_id={requestId} world=({position.x:F3},{position.y:F3},{position.z:F3})");
-    }
-
-    Vector3 ComputeSearchPanelFallbackPosition()
-    {
-        CapturePoseSnapshot pose = _hasActiveCapturePose
-            ? _activeCapturePose
-            : CapturePoseSnapshot.From(referenceCamera != null ? referenceCamera : Camera.main);
-
-        Vector2 viewport = _hasCaptureGazeViewport ? _captureGazeViewport : new Vector2(0.5f, 0.5f);
-        Ray ray = BuildRay(pose, viewport);
-        Vector3 right = pose.cameraRotation * Vector3.right;
-        Vector3 up = pose.cameraRotation * Vector3.up;
-        Vector3 basePos = ray.origin + ray.direction * Mathf.Max(0.05f, fallbackProjectionDistance);
-        return basePos + right * fallbackHorizontalOffset + up * fallbackVerticalOffset;
-    }
-
-    Ray BuildRay(CapturePoseSnapshot pose, Vector2 viewport)
-    {
-        float nx = viewport.x * 2f - 1f;
-        float ny = viewport.y * 2f - 1f;
-
-        if (pose.orthographic)
-        {
-            float halfHeight = pose.orthographicSize;
-            float halfWidth = halfHeight * Mathf.Max(0.01f, pose.aspect);
-            Vector3 localOrigin = new Vector3(nx * halfWidth, ny * halfHeight, 0f);
-            Vector3 worldOrigin = pose.cameraPosition + pose.cameraRotation * localOrigin;
-            Vector3 worldDirection = pose.cameraRotation * Vector3.forward;
-            return new Ray(worldOrigin, worldDirection.normalized);
-        }
-
-        float tanHalfFov = Mathf.Tan(pose.verticalFov * Mathf.Deg2Rad * 0.5f);
-        Vector3 localDirection = new Vector3(
-            nx * tanHalfFov * Mathf.Max(0.01f, pose.aspect),
-            ny * tanHalfFov,
-            1f).normalized;
-        Vector3 direction = pose.cameraRotation * localDirection;
-        return new Ray(pose.cameraPosition, direction.normalized);
-    }
-
-    int SelectDetection(VlmResultReceiver.VlmDetection[] detections)
-    {
-        bool useGaze = preferGazeNearestTarget && _hasCaptureGazeViewport;
-        bool useScreenCenter = !useGaze && preferScreenCenterWhenGazeUnavailable;
-        string policy = useGaze ? "gaze_nearest" : (useScreenCenter ? "screen_center_nearest" : "confidence_highest");
-        Debug.Log($"[OBJECT_UI] target selection policy={policy}");
-
-        int bestIndex = 0;
-        float bestScore = (useGaze || useScreenCenter) ? float.PositiveInfinity : float.NegativeInfinity;
-        Vector2 targetViewport = useGaze ? _captureGazeViewport : new Vector2(0.5f, 0.5f);
-
-        for (int i = 0; i < detections.Length; i++)
-        {
-            VlmResultReceiver.VlmDetection det = detections[i];
-            if (det == null || det.bbox == null || det.bbox.Length < 4) continue;
-            float conf = det.confidence > 0f ? det.confidence : det.conf;
-
-            if (useGaze || useScreenCenter)
-            {
-                Vector2 center = DetectionCenter01(det);
-                float distance = Vector2.SqrMagnitude(center - targetViewport);
-                if (distance < bestScore || (Mathf.Approximately(distance, bestScore) && conf > DetectionConfidence(detections[bestIndex])))
-                {
-                    bestScore = distance;
-                    bestIndex = i;
-                }
-            }
-            else
-            {
-                if (conf > bestScore)
-                {
-                    bestScore = conf;
-                    bestIndex = i;
-                }
-            }
-        }
-
-        return bestIndex;
-    }
-
-    float DetectionConfidence(VlmResultReceiver.VlmDetection det)
-    {
-        if (det == null) return -1f;
-        return det.confidence > 0f ? det.confidence : det.conf;
-    }
-
-    Vector2 DetectionCenter01(VlmResultReceiver.VlmDetection det)
-    {
-        int width = FirstPositive(det.image_width, det.imageWidth, Screen.width);
-        int height = FirstPositive(det.image_height, det.imageHeight, Screen.height);
-        float cx = (det.bbox[0] + det.bbox[2]) * 0.5f / Mathf.Max(1, width);
-        float cy = (det.bbox[1] + det.bbox[3]) * 0.5f / Mathf.Max(1, height);
-        return new Vector2(Mathf.Clamp01(cx), Mathf.Clamp01(1f - cy));
     }
 
     DetectionResult ToDetectionResult(VlmResultReceiver.VlmDetection det, VlmResultReceiver.VlmResultPayload payload, string requestId)
@@ -554,39 +433,6 @@ public class ObjectUiRequestManager : MonoBehaviour
             referenceCamera != null ? referenceCamera : Camera.main);
         Debug.Log("[OBJECT_UI] created runtime ObjectDetectionBubbleSpawner; detections will show as bubbles before action panel.");
         return bubbleSpawner;
-    }
-
-    void SpawnSingleSelectedDetection(VlmResultReceiver.VlmResultPayload payload, string responseRequestId, string reason)
-    {
-        if (payload == null || payload.detections == null || payload.detections.Length == 0)
-        {
-            SpawnSearchPanelFallback(responseRequestId, reason + "_no_detections");
-            return;
-        }
-
-        int selectedIndex = SelectDetection(payload.detections);
-        VlmResultReceiver.VlmDetection selected = payload.detections[selectedIndex];
-        DetectionResult detection = ToDetectionResult(selected, payload, responseRequestId);
-        if (detection == null)
-        {
-            Debug.LogWarning($"[OBJECT_UI][WARN] fallback selected detection is invalid reason={reason}; using search-panel fallback position");
-            SpawnSearchPanelFallback(responseRequestId, reason + "_invalid_detection");
-            return;
-        }
-
-        detection.requireExactRequestContext = true;
-        Debug.Log($"[OBJECT_UI] fallback single selection reason={reason} index={selectedIndex} class={detection.label} conf={detection.confidence:F3}");
-
-        ObjectActionRadialMenuSpawner radialSpawner = ResolveRadialMenuSpawner();
-        if (radialSpawner == null)
-        {
-            Debug.LogWarning($"[OBJECT_UI][WARN] radial menu spawner unavailable for fallback reason={reason}.");
-            return;
-        }
-
-        bool spawnedOnDetection = radialSpawner.HandleDetectionResult(detection, payload, responseRequestId);
-        if (!spawnedOnDetection)
-            SpawnSearchPanelFallback(responseRequestId, reason + "_anchor_failed");
     }
 
     ObjectActionRadialMenuSpawner ResolveRadialMenuSpawner()

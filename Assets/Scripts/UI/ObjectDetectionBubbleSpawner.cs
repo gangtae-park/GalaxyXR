@@ -115,6 +115,7 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
                 continue;
             }
 
+            Vector2 center = detection.Center;
             Vector3 worldPosition = ComputeBubbleWorldPosition(detection);
             ObjectDetectionBubble bubble = Instantiate(bubblePrefab, worldPosition, Quaternion.identity, parent);
             bubble.gameObject.SetActive(true);
@@ -123,6 +124,7 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
             activeBubbles.Add(bubble);
             spawned++;
 
+            Debug.Log($"[UIInteraction] Bubble created: {detection.label}, {detection.confidence:F3}, bbox center=({center.x:F1},{center.y:F1})");
             if (verboseLogging)
                 Debug.Log($"[OBJECT_BUBBLE] spawned index={i} label={detection.label} conf={detection.confidence:F3} world=({worldPosition.x:F3},{worldPosition.y:F3},{worldPosition.z:F3}) request_id={requestId}");
         }
@@ -143,12 +145,15 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
 
     public void ClearBubbles()
     {
+        int cleared = activeBubbles.Count;
         for (int i = 0; i < activeBubbles.Count; i++)
         {
             if (activeBubbles[i] != null)
                 Destroy(activeBubbles[i].gameObject);
         }
         activeBubbles.Clear();
+        if (cleared > 0)
+            Debug.Log("[UIInteraction] Cleared bubbles");
     }
 
     ObjectDetectionBubble CreateRuntimeBubblePrefab()
@@ -239,6 +244,7 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
             return;
         }
 
+        Debug.Log($"[UIInteraction] Bubble clicked: {detection.label}");
         Debug.Log($"[OBJECT_BUBBLE] clicked label={detection.label} conf={detection.confidence:F3} request_id={requestId}");
         ClearBubbles();
         ResolveReferences();
@@ -249,6 +255,7 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
             return;
         }
 
+        Debug.Log("[UIInteraction] Opening UI panel from bubble click");
         Debug.Log("[OBJECT_BUBBLE] calling radial menu spawner...");
         bool spawned = radialMenuSpawner.HandleDetectionResult(detection, payload, requestId);
         if (!spawned)
