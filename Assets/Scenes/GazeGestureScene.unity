@@ -641,7 +641,9 @@ Transform:
   m_LocalPosition: {x: 1.65605, y: 0, z: 5.02443}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 576430118}
+  - {fileID: 358138116}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &136429830
@@ -2256,6 +2258,60 @@ MonoBehaviour:
   referenceCamera: {fileID: 0}
   lockUpright: 1
   smoothing: 0.1
+--- !u!1 &358138114
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 358138116}
+  - component: {fileID: 358138115}
+  m_Layer: 0
+  m_Name: CaptureManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &358138115
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 358138114}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 45ac9b94314744f8d9b1efea8c43ec90, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CaptureManager
+  referenceCamera: {fileID: 0}
+  captureControlCardPrefab: {fileID: 1878015464359111182, guid: 6a50ffc22288144d2b3394d1b7bf9ab7, type: 3}
+  rightPinchAction: {fileID: 187161793506945269, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  leftPinchAction: {fileID: -6131295136447488360, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  rightPinchPositionAction: {fileID: -7813013294023911475, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  leftPinchPositionAction: {fileID: -2706128282752906596, guid: c348712bda248c246b8c49b3db54643f, type: 3}
+  cardDepth: 1.2
+  minInitialWorldSize: {x: 0.08, y: 0.08}
+  fallbackInitialWorldSize: {x: 0.3, y: 0.3}
+  verboseLogging: 1
+--- !u!4 &358138116
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 358138114}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 136429829}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &361856894
 GameObject:
   m_ObjectHideFlags: 0
@@ -3575,12 +3631,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 576430116}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -1.65605, y: 0, z: -5.02443}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 136429829}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &611616339
 PrefabInstance:
@@ -6916,6 +6972,7 @@ MonoBehaviour:
   translateResultCardPrefab: {fileID: 6479749716276046289, guid: 1f36e23ae91aa4ed893cbae382d25e36, type: 3}
   anchorPinPrefab: {fileID: 1960211650334644200, guid: 16643e303c19a4ab38711739e648e72e, type: 3}
   noteManager: {fileID: 576430117}
+  captureManager: {fileID: 358138115}
   maxAnchors: 0
   gazeProjectionDistance: 0.8
   horizontalOffset: 0.12
@@ -14434,5 +14491,4 @@ SceneRoots:
   - {fileID: 1110963235}
   - {fileID: 356742521}
   - {fileID: 1708595859}
-  - {fileID: 576430118}
   - {fileID: 1539036406}
