@@ -45,6 +45,10 @@ public class ResultCardSpawner : MonoBehaviour
     public GameObject translateResultCardPrefab;
     public GameObject anchorPinPrefab;
 
+    [Header("Note flow (Save)")]
+    [Tooltip("Owns the SaveNoteCard / StickyNote / ViewNoteCard lifecycle. Required to handle Save VLM_RESULT.")]
+    public NoteManager noteManager;
+
     [Header("Anchor management")]
     [Tooltip("Maximum simultaneous anchor pins. 0 = unlimited. When exceeded the oldest is destroyed (FIFO).")]
     public int maxAnchors = 0;
@@ -137,6 +141,14 @@ public class ResultCardSpawner : MonoBehaviour
             return;
         }
 
+        // Save is fail-gated just like Anchor: a fail status means Python
+        // couldn't identify the object, so we don't open the note UI at all.
+        if (gesture == "Save")
+        {
+            DispatchSave(payload);
+            return;
+        }
+
         if (payload.response == null) return;
 
         switch (gesture)
@@ -158,6 +170,42 @@ public class ResultCardSpawner : MonoBehaviour
                     Debug.Log($"[ResultCardSpawner] gesture '{gesture}' has no card handler yet.");
                 break;
         }
+    }
+
+    // ---------- Save ----------
+
+    void DispatchSave(VlmResultReceiver.VlmResultPayload payload)
+    {
+        bool failed =
+            (payload.status != null && payload.status.Equals("fail", System.StringComparison.OrdinalIgnoreCase))
+            || (payload.response != null && !string.IsNullOrEmpty(payload.response.error));
+        if (failed)
+        {
+            if (verboseLogging)
+                Debug.Log($"[ResultCardSpawner] Save REJECTED: status={payload.status} reason='{payload.reason}'.");
+            return;
+        }
+        if (payload.response == null) return;
+        if (noteManager == null)
+        {
+            Debug.LogWarning("[ResultCardSpawner] noteManager not assigned; cannot open SaveNoteCard.");
+            return;
+        }
+
+        Vector3 pos = ComputeSpawnPosition();
+        Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
+        Quaternion rot = (cam != null)
+            ? Quaternion.LookRotation(cam.transform.forward, Vector3.up)
+            : Quaternion.identity;
+
+        noteManager.BeginNote(
+            payload.response.object_id ?? "",
+            payload.response.name ?? "",
+            pos,
+            rot
+        );
+        if (verboseLogging)
+            Debug.Log($"[ResultCardSpawner] Save -> NoteManager.BeginNote(name='{payload.response.name}', id='{payload.response.object_id}').");
     }
 
     // ---------- Anchor ----------

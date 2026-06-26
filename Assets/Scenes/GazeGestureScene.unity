@@ -3531,6 +3531,57 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: -15}
   m_SizeDelta: {x: 0, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &576430116
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 576430118}
+  - component: {fileID: 576430117}
+  m_Layer: 0
+  m_Name: NoteManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &576430117
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 576430116}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 911eeeb89f3ca45eeab061334a47801b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NoteManager
+  saveNoteCardPrefab: {fileID: 8993544090593973299, guid: fce7c2b940da64d7289ed61b17f803c9, type: 3}
+  viewNoteCardPrefab: {fileID: 3545781333598353942, guid: cbfc8f9ad7e664affb7e8174cad038a6, type: 3}
+  stickyNotePrefab: {fileID: 1373808945020994600, guid: 1999e9f6bf87f42cf8b89734c251c9fc, type: 3}
+  replaceOpenCard: 1
+  singleOpenCard: 1
+  stickyNoteScale: 0.00625
+  verboseLogging: 1
+--- !u!4 &576430118
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 576430116}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &611616339
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -6859,11 +6910,12 @@ MonoBehaviour:
   eyeGazeReader: {fileID: 198504609}
   msgSender: {fileID: 1110963236}
   referenceCamera: {fileID: 1948693200}
-  searchResultCardPrefab: {fileID: 2818028396226705512, guid: 48871991c54c847bcb79c10583059d42, type: 3}
-  askQuestionCardPrefab: {fileID: 2818028396226705512, guid: d5506294734264ebfb2ada9f4b4134c8, type: 3}
-  askResultCardPrefab: {fileID: 2818028396226705512, guid: adb722f35143547609b2e5366750e847, type: 3}
-  translateResultCardPrefab: {fileID: 2818028396226705512, guid: c21f37f7d63cd4a8ca61d2cc3eba682a, type: 3}
+  searchResultCardPrefab: {fileID: 2083513210916915705, guid: 767db20adfa0b4296a4c240cc57fcf5c, type: 3}
+  askQuestionCardPrefab: {fileID: 3190488951520297792, guid: 9c7357347a61c454aad4c74baba933ef, type: 3}
+  askResultCardPrefab: {fileID: 8359107133757752391, guid: 9e328b0987ad6451782bd52c5fd024a6, type: 3}
+  translateResultCardPrefab: {fileID: 6479749716276046289, guid: 1f36e23ae91aa4ed893cbae382d25e36, type: 3}
   anchorPinPrefab: {fileID: 1960211650334644200, guid: 16643e303c19a4ab38711739e648e72e, type: 3}
+  noteManager: {fileID: 576430117}
   maxAnchors: 0
   gazeProjectionDistance: 0.8
   horizontalOffset: 0.12
@@ -9030,6 +9082,71 @@ MonoBehaviour:
   - android.permission.HAND_TRACKING
   - android.permission.RECORD_AUDIO
   verboseLogging: 1
+--- !u!1001 &1539036406
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 2314523925997562660, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0.19186
+      objectReference: {fileID: 0}
+    - target: {fileID: 2314523925997562660, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2314523925997562660, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 10.4087
+      objectReference: {fileID: 0}
+    - target: {fileID: 2314523925997562660, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2314523925997562660, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2314523925997562660, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2314523925997562660, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2314523925997562660, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2314523925997562660, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2314523925997562660, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2314523925997562666, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
+      propertyPath: m_Name
+      value: XRI Global Keyboard Manager
+      objectReference: {fileID: 0}
+    - target: {fileID: 2314523925997562667, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
+      propertyPath: m_KeyboardOffset.y
+      value: -0.4
+      objectReference: {fileID: 0}
+    - target: {fileID: 2314523925997562667, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
+      propertyPath: m_KeyboardOffset.z
+      value: 0.35
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 763522a439f36ac4d881f5652181a2ee, type: 3}
 --- !u!1001 &1542318347
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -14317,3 +14434,5 @@ SceneRoots:
   - {fileID: 1110963235}
   - {fileID: 356742521}
   - {fileID: 1708595859}
+  - {fileID: 576430118}
+  - {fileID: 1539036406}

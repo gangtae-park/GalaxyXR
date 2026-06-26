@@ -17,12 +17,14 @@ public class VlmResultReceiver : MonoBehaviour
     public class VlmResponse
     {
         public string name;
+        public string object_id;
         public string description;
         public string typical_use;
         public string info;
         public string answer;
         public string translation;
         public string result_search;
+        public string message;
         public string error;
         public string raw;
         public string finish_reason;
