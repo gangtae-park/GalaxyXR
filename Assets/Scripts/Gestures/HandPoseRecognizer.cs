@@ -39,7 +39,8 @@ public class HandPoseRecognizer : MonoBehaviour
     [Range(0.6f, 1f)] public float fingerExtendedRatio = 0.90f;
 
     [Header("Palm orientation (Save)")]
-    [Range(0f, 1f)] public float palmUpDotThreshold = 0.68f;
+    public Transform headCamera;
+    [Range(0f, 1f)] public float palmFacingCameraDotThreshold = 0.8f;
 
     [Header("Scribble (Save)")]
     public float scribbleWindowSeconds = 1.5f;
@@ -58,7 +59,8 @@ public class HandPoseRecognizer : MonoBehaviour
     [SerializeField] private bool leftHandTracked;
     [SerializeField] private bool rightHandTracked;
     [SerializeField] private bool leftPalmOpen;
-    [SerializeField] private bool leftPalmFacingUp;
+    [SerializeField] private bool leftPalmFacingCamera;
+    [SerializeField] private float palmFacingCameraDot;
     [SerializeField] private float indexPalmDistance = -1f;
     [SerializeField] private int scribbleReversals;
     [SerializeField] private float scribbleLateralTravel;
@@ -113,7 +115,7 @@ public class HandPoseRecognizer : MonoBehaviour
             return Reset(HandPoseKind.CapturePose);
         
         // {Save} pose check
-        // 1) left palm fully open + facing up
+        // 1) left palm fully open + facing the user camera
         leftPalmOpen = IsHandFullyOpen(left);
         if (!leftPalmOpen) return Reset(HandPoseKind.None);
 
@@ -121,8 +123,12 @@ public class HandPoseRecognizer : MonoBehaviour
             return Reset(HandPoseKind.None);
         Vector3 palmCenter = leftPalmPose.position;
         Vector3 palmNormal = leftPalmPose.rotation * new Vector3(0f, -1f, 0f);
-        leftPalmFacingUp = Vector3.Dot(palmNormal, Vector3.up) >= palmUpDotThreshold;
-        if (!leftPalmFacingUp) return Reset(HandPoseKind.None);
+        Vector3 palmToCamera = GetCameraPosition() - palmCenter;
+        if (palmToCamera.sqrMagnitude < 1e-8f) return Reset(HandPoseKind.None);
+        palmToCamera.Normalize();
+        palmFacingCameraDot = Vector3.Dot(palmNormal, palmToCamera);
+        leftPalmFacingCamera = palmFacingCameraDot >= palmFacingCameraDotThreshold;
+        if (!leftPalmFacingCamera) return Reset(HandPoseKind.None);
 
         // 2) right index tip close to the left palm + lateral scribble
         if (!TryGetPos(right, XRHandJointID.IndexTip, out Vector3 indexTip))
@@ -187,7 +193,7 @@ public class HandPoseRecognizer : MonoBehaviour
                 $" | L T={lThumb:F2} I={lIndex:F2} M={lMiddle:F2} R={lRing:F2} L={lLittle:F2}" +
                 $" | R T={rThumb:F2} I={rIndex:F2} M={rMiddle:F2} R={rRing:F2} L={rLittle:F2}" +
                 // $" (extended >= {fingerExtendedRatio:F2}, curled <= {fingerCurledRatio:F2}; 0.00 = joints not tracked)" +
-                // $" | leftPalmOpen={leftPalmOpen} facingUp={leftPalmFacingUp}" +
+                $" | leftPalmOpen={leftPalmOpen} facingCamera={leftPalmFacingCamera} ({palmFacingCameraDot:F2})" +
                 $" | leftL={cameraLeftLShape}({lLShapeReject}) rightL={cameraRightLShape}({rLShapeReject})" +
                 $" L={lThumbIndexDot:F2} R={rThumbIndexDot:F2}" +
                 // $" (perp needs |dot| <= {thumbIndexPerpDot:F2})" +
@@ -204,7 +210,8 @@ public class HandPoseRecognizer : MonoBehaviour
     {
         ClearScribble();
         leftPalmOpen = false;
-        leftPalmFacingUp = false;
+        leftPalmFacingCamera = false;
+        palmFacingCameraDot = 0f;
         indexPalmDistance = -1f;
         if (k != HandPoseKind.CapturePose)
         {
@@ -224,6 +231,14 @@ public class HandPoseRecognizer : MonoBehaviour
     }
 
     // ====== pose checks ======
+
+    private Camera _resolvedCamera;
+    Vector3 GetCameraPosition()
+    {
+        if (headCamera != null) return headCamera.position;
+        if (_resolvedCamera == null) _resolvedCamera = Camera.main;
+        return _resolvedCamera != null ? _resolvedCamera.transform.position : Vector3.zero;
+    }
 
     void SnapshotFingerRatios(XRHand hand)
     {

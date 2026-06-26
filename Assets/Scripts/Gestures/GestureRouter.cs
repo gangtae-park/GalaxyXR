@@ -53,13 +53,13 @@ public class GestureRouter : MonoBehaviour
 
     [Header("Pose recognition (Save / Capture)")]
     public HandPoseRecognizer poseRecognizer;
-    public float poseEvalIntervalSeconds = 0.2f;
+    public float poseEvalIntervalSeconds = 0.1f;
     public string saveGestureName = "Save";
     public float saveEntryHoldTimeoutSeconds = 2f;
     public string captureGestureName = "Capture";
-    public float cameraHoldSeconds = 1.5f;
+    public float cameraHoldSeconds = 1.2f;
     public bool verboseCameraHoldLogging = false;
-    public float cameraHoldLogIntervalSeconds = 0.1f;
+    public float cameraHoldLogIntervalSeconds = 0.5f;
 
     [Header("Status (read-only)")]
     [SerializeField] private bool capturing;

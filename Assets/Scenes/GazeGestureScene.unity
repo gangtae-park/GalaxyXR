@@ -678,9 +678,9 @@ MonoBehaviour:
   saveGestureName: Save
   saveEntryHoldTimeoutSeconds: 2
   captureGestureName: Capture
-  cameraHoldSeconds: 1.5
+  cameraHoldSeconds: 1.2
   verboseCameraHoldLogging: 1
-  cameraHoldLogIntervalSeconds: 0.1
+  cameraHoldLogIntervalSeconds: 0.5
   capturing: 0
   captureElapsed: 0
   bufferFrameCount: 0
@@ -772,7 +772,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HandPoseRecognizer
   fingerExtendedRatio: 0.9
-  palmUpDotThreshold: 0.68
+  headCamera: {fileID: 0}
+  palmFacingCameraDotThreshold: 0.8
   scribbleWindowSeconds: 1.5
   scribbleMaxPalmDistance: 0.06
   scribbleMinReversals: 3
@@ -785,7 +786,8 @@ MonoBehaviour:
   leftHandTracked: 0
   rightHandTracked: 0
   leftPalmOpen: 0
-  leftPalmFacingUp: 0
+  leftPalmFacingCamera: 0
+  palmFacingCameraDot: 0
   indexPalmDistance: -1
   scribbleReversals: 0
   scribbleLateralTravel: 0
@@ -3308,7 +3310,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 0}
+      - m_Target: {fileID: 1708595858}
         m_TargetAssemblyTypeName: SceneNavigator, Assembly-CSharp
         m_MethodName: LoadPreviousScene
         m_Mode: 1
@@ -3877,7 +3879,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 0}
+      - m_Target: {fileID: 1708595858}
         m_TargetAssemblyTypeName: SceneNavigator, Assembly-CSharp
         m_MethodName: LoadNextScene
         m_Mode: 1
@@ -10296,6 +10298,50 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1691745543}
   m_CullTransparentMesh: 0
+--- !u!1 &1708595857
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1708595859}
+  - component: {fileID: 1708595858}
+  m_Layer: 0
+  m_Name: SceneNavigator
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1708595858
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1708595857}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8fbd4dd828f47909daf27c348e805a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SceneNavigator
+--- !u!4 &1708595859
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1708595857}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1726903307
 GameObject:
   m_ObjectHideFlags: 0
@@ -14270,3 +14316,4 @@ SceneRoots:
   - {fileID: 136429829}
   - {fileID: 1110963235}
   - {fileID: 356742521}
+  - {fileID: 1708595859}
