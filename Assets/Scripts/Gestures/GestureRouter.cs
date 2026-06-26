@@ -6,12 +6,18 @@ using UnityEngine.InputSystem;
 /*
 Single component that drives the unified gesture pipeline.
 
-SINGLE-HAND gestures (Search / Ask / Translate / Anchor):
+- SINGLE-HAND gestures (Search / Ask / Translate / Anchor):
 1) Watch the right-hand pinch action. The rising edge of "pinch pressed" starts a capture window.
 2) For 'captureSeconds' after that edge, sample HandFeatureSource at minFrameInterval into a buffer.
 3) At the end of the window or every 'recognitionIntervalSeconds', hand the buffer to JackknifeUnifiedRecognizer.
     match   -> SendGestureEvent(name, END) + RECOGNIZED
     reject  -> SendGestureEvent(Pending, END) + FAIL
+
+- TWO-HAND gestures (Compare):
+
+
+- HandPose gestures (Save / Capture):
+
 */
 
 public class GestureRouter : MonoBehaviour
@@ -27,7 +33,7 @@ public class GestureRouter : MonoBehaviour
 
     [Header("Capture")]
     public float captureSeconds = 2.5f;
-    public float minFrameInterval = 0.03f;
+    public float minFrameInterval = 0.033f; //30Hz
 
     [Header("Recognition")]
     public float recognitionIntervalSeconds = 0.2f;
@@ -41,18 +47,19 @@ public class GestureRouter : MonoBehaviour
     public InputActionReference rightPinchPositionAction;
     public InputActionReference leftPinchPositionAction;
     public string compareGestureName = "Compare";
-    public float compareReadyTimeoutSeconds = 3f;
-    public float handsTogetherDistance = 0.03f;
+    public float compareReadyTimeoutSeconds = 2f;
+    public float handsTogetherDistance = 0.05f;
     public bool requireBothPinchHeldToComplete = true;
 
-    [Header("Pose recognition (Save / Camera)")]
-    [Tooltip("Geometric pose recognizer for non-pinch referents. Optional.")]
+    [Header("Pose recognition (Save / Capture)")]
     public HandPoseRecognizer poseRecognizer;
-    [Tooltip("Seconds between hand-pose evaluations. ~0.1 = 10 Hz; the geometry check is cheap.")]
     public float poseEvalIntervalSeconds = 0.1f;
     public string saveGestureName = "Save";
-    [Tooltip("After the left palm-up pose is detected, cancel back to idle if no scribble input arrives within this many seconds. The timer refreshes whenever scribble samples are actively being accumulated, so a slow scribble is not interrupted.")]
     public float saveEntryHoldTimeoutSeconds = 2f;
+    public string captureGestureName = "Capture";
+    public float cameraHoldSeconds = 1.2f;
+    public bool verboseCameraHoldLogging = false;
+    public float cameraHoldLogIntervalSeconds = 0.5f;
 
     [Header("Status (read-only)")]
     [SerializeField] private bool capturing;
@@ -64,6 +71,9 @@ public class GestureRouter : MonoBehaviour
     [SerializeField] private float handsDistance = -1f;
     [SerializeField] private bool savePending;
     [SerializeField] private bool saveRearmRequired;
+    [SerializeField] private bool cameraPending;
+    [SerializeField] private bool cameraRearmRequired;
+    [SerializeField] private float cameraHeldElapsed;
     [SerializeField] private string lastPoseResult = "";
 
     public bool IsCapturing => capturing;
@@ -83,6 +93,8 @@ public class GestureRouter : MonoBehaviour
     private float _compareReadyStartTime;
     private float _nextPoseEvalTime;
     private float _saveEntryDeadline;
+    private float _cameraEnterTime;
+    private float _nextCameraHoldLogTime;
     private readonly List<float[]> _frames = new List<float[]>(128);
 
     void OnEnable()
@@ -114,20 +126,15 @@ public class GestureRouter : MonoBehaviour
         }
         else
         {
-            // Rising edge of the right pinch starts a capture if we're idle.
-            // If Save is pending (left palm held up, waiting for scribble), the user
-            // is choosing to do a Search/Ask/Translate/Anchor instead -- pre-empt Save
-            // so Python's gesture state is cleanly handed over, then open the Jackknife
-            // window. Save can re-arm automatically once the pinch flow finishes.
             if (rightPressed && !_wasPressed && !capturing)
             {
-                if (savePending) PreemptSaveForPinch();
+                if (savePending) InterruptSave();
+                if (cameraPending) InterruptCapture();
                 StartCapture();
             }
 
             if (capturing)
             {
-                // A left pinch during the capture window arms Compare
                 if (leftPressed && !_leftWasPressed)
                     EnterCompareReady();
                 else
@@ -141,11 +148,11 @@ public class GestureRouter : MonoBehaviour
 
     void StartCapture()
     {
-        Debug.Log("[PinchPoseCapture] capture STARTED");
+        Debug.Log("[Study Log][GestureRouter] right-pinch STARTED");
 
         if (featureSource == null)
         {
-            Debug.LogError("[PinchPoseCapture] featureSource not assigned; abort.");
+            Debug.LogError("[Study Log][GestureRouter] featureSource not assigned; abort.");
             return;
         }
 
@@ -196,7 +203,7 @@ public class GestureRouter : MonoBehaviour
 
         string name = null;
         try { name = recognizer.Recognize(_frames); }
-        catch (Exception e) { Debug.LogError($"[PinchPoseCapture] Recognize threw: {e}"); }
+        catch (Exception e) { Debug.LogError($"[Study Log][GestureRouter] Recognize threw: {e}"); }
 
         if (string.IsNullOrEmpty(name)) return false;
 
@@ -208,7 +215,7 @@ public class GestureRouter : MonoBehaviour
     {
         capturing = false;
         lastRecognized = name;
-        Debug.Log($"[PinchPoseCapture] RECOGNIZED '{name}' at {captureElapsed:F2}s ({_frames.Count} frames) -- early end");
+        Debug.Log($"[Study Log][GestureRouter] RECOGNIZED: '{name}' at {captureElapsed:F2}s ({_frames.Count} frames) -- early end");
         SendEvent(name, "END");
         SendEvent(name, "RECOGNIZED");
         try { OnCaptureRecognized?.Invoke(name); } catch (Exception e) { Debug.LogError(e); }
@@ -218,7 +225,7 @@ public class GestureRouter : MonoBehaviour
     {
         capturing = false;
         lastRecognized = "rejected";
-        Debug.Log($"[PinchPoseCapture] rejected ({reason}) at {captureElapsed:F2}s ({_frames.Count} frames)");
+        Debug.Log($"[Study Log][GestureRouter] REJECT: ({reason}) at {captureElapsed:F2}s ({_frames.Count} frames)");
         SendEvent(pendingReferentName, "END");
         SendEvent(pendingReferentName, "FAIL");
         try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
@@ -233,9 +240,8 @@ public class GestureRouter : MonoBehaviour
         compareReadyElapsed = 0f;
         handsDistance = -1f;
         lastRecognized = "";
-        Debug.Log("[Study Log][GestureRouter] COMPARE READY");
-
-        SendEvent(compareGestureName, "READY");
+        Debug.Log($"[Study Log][GestureRouter] READY: '{compareGestureName}");
+        SendEvent(compareGestureName, "END");
         try { OnCompareReady?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
 
@@ -268,8 +274,7 @@ public class GestureRouter : MonoBehaviour
     {
         compareReady = false;
         lastRecognized = compareGestureName;
-        Debug.Log($"[Study Log][GestureRouter] COMPARE RECOGNIZED (hands met at {handsDistance:F3}m).");
-        SendEvent(compareGestureName, "END");
+        Debug.Log($"[Study Log][GestureRouter] RECOGNZIED: '{compareGestureName}'");
         SendEvent(compareGestureName, "RECOGNIZED");
         try { OnCaptureRecognized?.Invoke(compareGestureName); } catch (Exception e) { Debug.LogError(e); }
     }
@@ -278,20 +283,13 @@ public class GestureRouter : MonoBehaviour
     {
         compareReady = false;
         lastRecognized = "compare-cancelled";
-        Debug.Log($"[Study Log][GestureRouter] COMPARE cancelled ({reason}).");
-        SendEvent(pendingReferentName, "END");
+        Debug.Log($"[Study Log][GestureRouter] REJECT: '{compareGestureName}', {reason}.");
         SendEvent(pendingReferentName, "FAIL");
         try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
 
-    // ====== Pose recognition (Save / Camera) ======
-    // Drives the HandPoseRecognizer at a fixed cadence and translates its result
-    // into GESTURE_EVENT packets:
-    //   idle    + SaveEntry -> Save START   (Python begins gaze logging)
-    //   pending + Save      -> Save END + RECOGNIZED
-    //   pending + None      -> Save FAIL    (palm pose broken)
-    // We skip evaluation entirely while pinch-driven flows are in flight so
-    // the two pipelines never compete for the same hand state.
+    // ====== Pose Recognition (Save / Capture) ======
+
     void EvaluatePoseRecognition()
     {
         if (poseRecognizer == null) return;
@@ -299,7 +297,7 @@ public class GestureRouter : MonoBehaviour
 
         float now = Time.time;
         if (now < _nextPoseEvalTime) return;
-        _nextPoseEvalTime = now + Mathf.Max(0.02f, poseEvalIntervalSeconds);
+        _nextPoseEvalTime = now + poseEvalIntervalSeconds;
 
         HandPoseKind kind = HandPoseKind.None;
         try { kind = poseRecognizer.Evaluate(); }
@@ -309,19 +307,13 @@ public class GestureRouter : MonoBehaviour
         switch (kind)
         {
             case HandPoseKind.SaveEntry:
+                if (cameraPending) FinishCameraCancel("pose changed to {Save}");
                 if (!savePending)
                 {
-                    // Edge-triggered: after a previous Save (success or cancel) the user
-                    // must let the palm pose lapse (None / CameraPose) before another
-                    // Save can arm. Otherwise holding the palm up indefinitely would loop
-                    // START -> timeout FAIL -> START forever.
                     if (!saveRearmRequired) EnterSavePending();
                 }
                 else
                 {
-                    // Refresh the deadline as long as scribble samples are actively
-                    // being accumulated (so a slow scribble isn't cancelled mid-motion).
-                    // Otherwise: palm is just being held open -- cancel after the timeout.
                     if (poseRecognizer.CurrentScribbleSampleCount > 0)
                         _saveEntryDeadline = Time.time + saveEntryHoldTimeoutSeconds;
                     else if (Time.time >= _saveEntryDeadline)
@@ -329,6 +321,7 @@ public class GestureRouter : MonoBehaviour
                 }
                 break;
             case HandPoseKind.Save:
+                if (cameraPending) FinishCameraCancel($"pose changed to '{saveGestureName}'");
                 if (!savePending)
                 {
                     if (saveRearmRequired) break;
@@ -336,25 +329,41 @@ public class GestureRouter : MonoBehaviour
                 }
                 FinishSaveMatch();
                 break;
-            case HandPoseKind.CameraPose:
-                // Reserved -- the Capture gesture will be wired in here later.
-                if (savePending) FinishSaveCancel("pose changed to Camera");
-                saveRearmRequired = false;
+            case HandPoseKind.CapturePose:
+                if (savePending) FinishSaveCancel($"pose changed to '{captureGestureName}'");
+                if (!cameraPending)
+                {
+                    if (!cameraRearmRequired) EnterCameraPending();
+                }
+                else
+                {
+                    cameraHeldElapsed = Time.time - _cameraEnterTime;
+                    if (verboseCameraHoldLogging && Time.time >= _nextCameraHoldLogTime)
+                    {
+                        _nextCameraHoldLogTime = Time.time + cameraHoldLogIntervalSeconds;
+                        Debug.Log($"[Study Log][GestureRouter] {captureGestureName} held {cameraHeldElapsed:F2}s / {cameraHoldSeconds:F2}s");
+                    }
+                    if (cameraHeldElapsed >= cameraHoldSeconds)
+                        FinishCameraMatch();
+                }
                 break;
             case HandPoseKind.None:
             default:
                 if (savePending) FinishSaveCancel("palm pose lost");
+                if (cameraPending) FinishCameraCancel("camera pose broken");
                 saveRearmRequired = false;
+                cameraRearmRequired = false;
                 break;
         }
     }
 
+    // Save Manager
     void EnterSavePending()
     {
         savePending = true;
         lastRecognized = "";
         _saveEntryDeadline = Time.time + saveEntryHoldTimeoutSeconds;
-        Debug.Log($"[GestureRouter] {saveGestureName} pending: left palm up. Scribble with the right index within {saveEntryHoldTimeoutSeconds:F1}s to confirm.");
+        Debug.Log($"[Study Log][GestureRouter] {saveGestureName} pending: left palm up");
         SendEvent(saveGestureName, "START");
         try { OnCaptureStarted?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
@@ -364,7 +373,7 @@ public class GestureRouter : MonoBehaviour
         savePending = false;
         saveRearmRequired = true;
         lastRecognized = saveGestureName;
-        Debug.Log($"[GestureRouter] {saveGestureName} RECOGNIZED (scribble pattern detected).");
+        Debug.Log($"[Study Log][GestureRouter] RECOGNIZED: '{saveGestureName}'");
         SendEvent(saveGestureName, "END");
         SendEvent(saveGestureName, "RECOGNIZED");
         try { OnCaptureRecognized?.Invoke(saveGestureName); } catch (Exception e) { Debug.LogError(e); }
@@ -374,20 +383,57 @@ public class GestureRouter : MonoBehaviour
     {
         savePending = false;
         saveRearmRequired = true;
-        Debug.Log($"[GestureRouter] {saveGestureName} cancelled ({reason}). Re-arm requires the palm pose to lapse.");
+        Debug.Log($"[Study Log][GestureRouter] REJECT: '{saveGestureName}', {reason}");
         SendEvent(saveGestureName, "FAIL");
         try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
 
-    // Pre-empt a pending Save because the user just pinched (Search/Ask/etc.).
-    // Unlike FinishSaveCancel we deliberately leave saveRearmRequired = false so the
-    // Save flow re-arms automatically once the pinch capture finishes, without the
-    // user having to lower and re-raise the palm.
-    void PreemptSaveForPinch()
+    void InterruptSave()
     {
         savePending = false;
-        Debug.Log($"[GestureRouter] {saveGestureName} pre-empted by right pinch (handing over to Jackknife). Will re-arm after capture.");
+        Debug.Log($"[Study Log][GestureRouter] {saveGestureName} interrupted by right pinch (handing over to Jackknife)");
         SendEvent(saveGestureName, "FAIL");
+        try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    // Capture Manager
+    void EnterCameraPending()
+    {
+        cameraPending = true;
+        _cameraEnterTime = Time.time;
+        cameraHeldElapsed = 0f;
+        _nextCameraHoldLogTime = Time.time + cameraHoldLogIntervalSeconds;
+        lastRecognized = "";
+        Debug.Log($"[Study Log][GestureRouter] {captureGestureName} pose detected");
+        SendEvent(captureGestureName, "START");
+        try { OnCaptureStarted?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    void FinishCameraMatch()
+    {
+        cameraPending = false;
+        cameraRearmRequired = true;
+        lastRecognized = captureGestureName;
+        Debug.Log($"[Study Log][GestureRouter] RECOGNIZED: '{captureGestureName}'");
+        SendEvent(captureGestureName, "END");
+        SendEvent(captureGestureName, "RECOGNIZED");
+        try { OnCaptureRecognized?.Invoke(captureGestureName); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    void FinishCameraCancel(string reason)
+    {
+        cameraPending = false;
+        cameraRearmRequired = true;
+        Debug.Log($"[Study Log][GestureRouter] REJECT: '{captureGestureName}', {reason}");
+        SendEvent(captureGestureName, "FAIL");
+        try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    void InterruptCapture()
+    {
+        cameraPending = false;
+        Debug.Log($"[Study Log][GestureRouter] {captureGestureName} interrupted by right pinch (handing over to Jackknife)");
+        SendEvent(captureGestureName, "FAIL");
         try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
 
