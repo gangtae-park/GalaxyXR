@@ -113,7 +113,7 @@ public class HandPoseRecognizer : MonoBehaviour
         // {Capture} pose check
         if (IsCapturePose(left, right))
             return Reset(HandPoseKind.CapturePose);
-        
+
         // {Save} pose check
         // 1) left palm fully open + facing the user camera
         leftPalmOpen = IsHandFullyOpen(left);
@@ -196,11 +196,7 @@ public class HandPoseRecognizer : MonoBehaviour
                 $" | leftPalmOpen={leftPalmOpen} facingCamera={leftPalmFacingCamera} ({palmFacingCameraDot:F2})" +
                 $" | leftL={cameraLeftLShape}({lLShapeReject}) rightL={cameraRightLShape}({rLShapeReject})" +
                 $" L={lThumbIndexDot:F2} R={rThumbIndexDot:F2}" +
-                // $" (perp needs |dot| <= {thumbIndexPerpDot:F2})" +
                 $" | thumbsDot={cameraThumbsDot:F2} indexesDot={cameraIndexesDot:F2}"
-                // $" (anti-parallel needs <= {handsAntiParallelDot:F2})" +
-                // $" | scribble samples={CurrentScribbleSampleCount}" +
-                // $" reversals={scribbleReversals} travel={scribbleLateralTravel:F3}m"
             );
         }
         return k;
