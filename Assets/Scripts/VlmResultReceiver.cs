@@ -17,12 +17,14 @@ public class VlmResultReceiver : MonoBehaviour
     public class VlmResponse
     {
         public string name;
+        public string object_id;
         public string description;
         public string typical_use;
         public string info;
         public string answer;
         public string translation;
         public string result_search;
+        public string message;
         public string error;
         public string raw;
         public string finish_reason;
@@ -34,6 +36,7 @@ public class VlmResultReceiver : MonoBehaviour
     {
         public string source;
         public int[] bbox;
+        public int[] frame_size;   // [width, height] of the source frame; lets Unity convert bbox pixels to viewport fractions
         public float best_overlap;
         public float best_iou;
         public string class_name;

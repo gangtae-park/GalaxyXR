@@ -45,6 +45,14 @@ public class ResultCardSpawner : MonoBehaviour
     public GameObject translateResultCardPrefab;
     public GameObject anchorPinPrefab;
 
+    [Header("Note flow (Save)")]
+    [Tooltip("Owns the SaveNoteCard / StickyNote / ViewNoteCard lifecycle. Required to handle Save VLM_RESULT.")]
+    public NoteManager noteManager;
+
+    [Header("Capture flow")]
+    [Tooltip("Owns the CaptureControlCard lifecycle. Required to handle Capture VLM_RESULT.")]
+    public CaptureManager captureManager;
+
     [Header("Anchor management")]
     [Tooltip("Maximum simultaneous anchor pins. 0 = unlimited. When exceeded the oldest is destroyed (FIFO).")]
     public int maxAnchors = 0;
@@ -137,6 +145,22 @@ public class ResultCardSpawner : MonoBehaviour
             return;
         }
 
+        // Save is fail-gated just like Anchor: a fail status means Python
+        // couldn't identify the object, so we don't open the note UI at all.
+        if (gesture == "Save")
+        {
+            DispatchSave(payload);
+            return;
+        }
+
+        // Capture is also fail-gated. Successful response opens a sizing card
+        // anchored on the object; both-hand pinch (or 10 s timeout) closes it.
+        if (gesture == "Capture")
+        {
+            DispatchCapture(payload);
+            return;
+        }
+
         if (payload.response == null) return;
 
         switch (gesture)
@@ -158,6 +182,80 @@ public class ResultCardSpawner : MonoBehaviour
                     Debug.Log($"[ResultCardSpawner] gesture '{gesture}' has no card handler yet.");
                 break;
         }
+    }
+
+    // ---------- Save ----------
+
+    void DispatchSave(VlmResultReceiver.VlmResultPayload payload)
+    {
+        bool failed =
+            (payload.status != null && payload.status.Equals("fail", System.StringComparison.OrdinalIgnoreCase))
+            || (payload.response != null && !string.IsNullOrEmpty(payload.response.error));
+        if (failed)
+        {
+            if (verboseLogging)
+                Debug.Log($"[ResultCardSpawner] Save REJECTED: status={payload.status} reason='{payload.reason}'.");
+            return;
+        }
+        if (payload.response == null) return;
+        if (noteManager == null)
+        {
+            Debug.LogWarning("[ResultCardSpawner] noteManager not assigned; cannot open SaveNoteCard.");
+            return;
+        }
+
+        Vector3 pos = ComputeSpawnPosition();
+        Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
+        Quaternion rot = (cam != null)
+            ? Quaternion.LookRotation(cam.transform.forward, Vector3.up)
+            : Quaternion.identity;
+
+        noteManager.BeginNote(
+            payload.response.object_id ?? "",
+            payload.response.name ?? "",
+            pos,
+            rot
+        );
+        if (verboseLogging)
+            Debug.Log($"[ResultCardSpawner] Save -> NoteManager.BeginNote(name='{payload.response.name}', id='{payload.response.object_id}').");
+    }
+
+    // ---------- Capture ----------
+
+    void DispatchCapture(VlmResultReceiver.VlmResultPayload payload)
+    {
+        bool failed =
+            (payload.status != null && payload.status.Equals("fail", System.StringComparison.OrdinalIgnoreCase))
+            || (payload.response != null && !string.IsNullOrEmpty(payload.response.error));
+        if (failed)
+        {
+            if (verboseLogging)
+                Debug.Log($"[ResultCardSpawner] Capture REJECTED: status={payload.status} reason='{payload.reason}'.");
+            return;
+        }
+        if (payload.response == null) return;
+        if (captureManager == null)
+        {
+            Debug.LogWarning("[ResultCardSpawner] captureManager not assigned; cannot open CaptureControlCard.");
+            return;
+        }
+
+        // Centre on the object itself -- skip the right/up offsets that the
+        // other cards use (they'd push the rectangle off the object).
+        Vector3 pos = _haveGazeSnapshot ? _lastGazeWorldPos : ComputeGazeWorldPosition();
+        int[] bbox = payload.target_meta != null ? payload.target_meta.bbox : null;
+        int[] frameSize = payload.target_meta != null ? payload.target_meta.frame_size : null;
+
+        captureManager.BeginCapture(
+            payload.response.name ?? "",
+            payload.response.object_id ?? "",
+            pos,
+            bbox,
+            frameSize
+        );
+
+        if (verboseLogging)
+            Debug.Log($"[ResultCardSpawner] Capture -> CaptureManager.BeginCapture(name='{payload.response.name}', bbox={(bbox != null ? string.Join(",", bbox) : "null")}, frame={(frameSize != null ? string.Join("x", frameSize) : "null")}).");
     }
 
     // ---------- Anchor ----------
