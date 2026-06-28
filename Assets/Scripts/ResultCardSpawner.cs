@@ -333,15 +333,39 @@ public class ResultCardSpawner : MonoBehaviour
             Debug.LogWarning("[ResultCardSpawner] translateResultCardPrefab not assigned.");
             return;
         }
-        ReplaceCurrentCard();
 
-        GameObject go = Instantiate(translateResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
-        var card = go.GetComponent<TranslateResultCard>();
-        if (card != null)
-            card.SetContent(payload.response.translation);
-        _currentCard = go;
-        if (verboseLogging)
-            Debug.Log($"[ResultCardSpawner] spawned TranslateResultCard translation='{payload.response.translation}'");
+        string stage = payload.stage ?? "";
+        string srcText = payload.response.name ?? "";
+        string translation = payload.response.translation ?? "";
+
+        // Reuse the existing card across stages so the OCR text doesn't flash and the
+        // translation visibly fills in. New card only if there's no current Translate
+        // card (or the user replaced it via another gesture).
+        TranslateResultCard card = _currentCard != null ? _currentCard.GetComponent<TranslateResultCard>() : null;
+        if (card == null)
+        {
+            ReplaceCurrentCard();
+            GameObject go = Instantiate(translateResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+            _currentCard = go;
+            card = go.GetComponent<TranslateResultCard>();
+        }
+        if (card == null) return;
+
+        if (stage == "ocr")
+        {
+            card.SetOcrOnly(srcText);
+            if (verboseLogging) Debug.Log($"[ResultCardSpawner] Translate OCR -> '{srcText}'");
+        }
+        else if (stage == "translation" || !string.IsNullOrEmpty(translation))
+        {
+            card.SetTranslation(srcText, translation);
+            if (verboseLogging) Debug.Log($"[ResultCardSpawner] Translate KO -> '{translation}' (src='{srcText}')");
+        }
+        else
+        {
+            // Stage missing or unknown -- fall back to translation-only legacy path.
+            card.SetContent(translation);
+        }
     }
 
     // ---------- Search ----------

@@ -681,6 +681,8 @@ MonoBehaviour:
   saveEntryHoldTimeoutSeconds: 2
   captureGestureName: Capture
   cameraHoldSeconds: 1.2
+  translateGestureName: Translate
+  translateReadyTimeoutSeconds: 10
   verboseCameraHoldLogging: 1
   cameraHoldLogIntervalSeconds: 0.5
   capturing: 0
@@ -695,6 +697,8 @@ MonoBehaviour:
   cameraPending: 0
   cameraRearmRequired: 0
   cameraHeldElapsed: 0
+  translateReady: 0
+  translateReadyElapsed: 0
   lastPoseResult: 
 --- !u!114 &136429831
 MonoBehaviour:
@@ -784,6 +788,10 @@ MonoBehaviour:
   fingerCurledRatio: 0.7
   thumbIndexPerpDot: 0.7
   handsAntiParallelDot: -0.5
+  palmFacingAwayDotThreshold: -0.3
+  swipeWindowSeconds: 0.7
+  swipeMinForwardDistance: 0.15
+  swipeMinForwardVelocity: 0.3
   lastResult: 0
   leftHandTracked: 0
   rightHandTracked: 0
@@ -811,6 +819,9 @@ MonoBehaviour:
   rThumbIndexDot: 1
   lLShapeReject: 
   rLShapeReject: 
+  swipeLeftForward: 0
+  swipeRightForward: 0
+  swipeReason: 
   verboseLogging: 1
 --- !u!1 &152278406
 GameObject:

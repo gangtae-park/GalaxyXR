@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.XR.Hands;
 
 /*
 Single component that drives the unified gesture pipeline.
@@ -58,6 +59,20 @@ public class GestureRouter : MonoBehaviour
     public float saveEntryHoldTimeoutSeconds = 2f;
     public string captureGestureName = "Capture";
     public float cameraHoldSeconds = 1.2f;
+    public string translateGestureName = "Translate";
+    [Tooltip("After Jackknife recognises Translate, the router waits this many seconds for a confirming leftward swipe of the right palm. No swipe within the window -> Translate FAIL.")]
+    public float translateReadyTimeoutSeconds = 10f;
+    [Tooltip("Camera used as the reference for the 'leftward' direction. Null -> Camera.main.")]
+    public Camera referenceCamera;
+    [Tooltip("Sliding window for tracking the right palm's leftward motion (seconds).")]
+    public float swipeWindowSeconds = 0.7f;
+    [Tooltip("Minimum leftward (relative to camera) displacement of the right palm within the window to count as a swipe (metres).")]
+    public float swipeMinLeftwardDistance = 0.15f;
+    [Tooltip("Minimum leftward velocity of the latest sample so the swipe must still be in progress (metres/second).")]
+    public float swipeMinLeftwardVelocity = 0.3f;
+    [Tooltip("Periodic log of the translateReady countdown + swipe diagnostics so build-and-run users can see wait progress + tune thresholds.")]
+    public bool verboseTranslateReadyLogging = true;
+    public float translateReadyLogIntervalSeconds = 1f;
     public bool verboseCameraHoldLogging = false;
     public float cameraHoldLogIntervalSeconds = 0.5f;
 
@@ -74,6 +89,11 @@ public class GestureRouter : MonoBehaviour
     [SerializeField] private bool cameraPending;
     [SerializeField] private bool cameraRearmRequired;
     [SerializeField] private float cameraHeldElapsed;
+    [SerializeField] private bool translateReady;
+    [SerializeField] private float translateReadyElapsed;
+    [SerializeField] private float swipeLeftwardDistance;
+    [SerializeField] private float swipeLeftwardVelocity;
+    [SerializeField] private string swipeReason = "";
     [SerializeField] private string lastPoseResult = "";
 
     public bool IsCapturing => capturing;
@@ -95,6 +115,11 @@ public class GestureRouter : MonoBehaviour
     private float _saveEntryDeadline;
     private float _cameraEnterTime;
     private float _nextCameraHoldLogTime;
+    private float _translateReadyStartTime;
+    private float _nextTranslateReadyLogTime;
+    private XRHandSubsystem _handSubsystem;
+    private struct SwipeSample { public float t; public Vector3 pos; }
+    private readonly List<SwipeSample> _swipeBuf = new List<SwipeSample>(64);
     private readonly List<float[]> _frames = new List<float[]>(128);
 
     void OnEnable()
@@ -116,6 +141,7 @@ public class GestureRouter : MonoBehaviour
     void Update()
     {
         EvaluatePoseRecognition();
+        UpdateRightHandSwipe();
 
         bool rightPressed = ReadPressed(pinchAction);
         bool leftPressed = ReadPressed(leftPinchAction);
@@ -126,7 +152,7 @@ public class GestureRouter : MonoBehaviour
         }
         else
         {
-            if (rightPressed && !_wasPressed && !capturing)
+            if (rightPressed && !_wasPressed && !capturing && !translateReady)
             {
                 if (savePending) InterruptSave();
                 if (cameraPending) InterruptCapture();
@@ -215,6 +241,15 @@ public class GestureRouter : MonoBehaviour
     {
         capturing = false;
         lastRecognized = name;
+
+        // Translate has a two-stage confirm: Jackknife match enters a "ready"
+        // window; an actual palm-forward swipe is required to fire END.
+        if (!string.IsNullOrEmpty(translateGestureName) && name == translateGestureName)
+        {
+            EnterTranslateReady();
+            return;
+        }
+
         Debug.Log($"[Study Log][GestureRouter] RECOGNIZED: '{name}' at {captureElapsed:F2}s ({_frames.Count} frames) -- early end");
         SendEvent(name, "END");
         SendEvent(name, "RECOGNIZED");
@@ -303,6 +338,19 @@ public class GestureRouter : MonoBehaviour
         try { kind = poseRecognizer.Evaluate(); }
         catch (Exception e) { Debug.LogError($"[GestureRouter] poseRecognizer.Evaluate threw: {e}"); }
         lastPoseResult = kind.ToString();
+
+        // TranslateReady tick: while waiting for the confirming swipe, track
+        // elapsed and time out. The swipe itself is handled in the switch below.
+        // Swipe detection runs in UpdateRightHandSwipe() at frame rate. Here we
+        // only handle the timeout while in translateReady; ignore HandPoseKind
+        // results (Save / Capture / None) so they don't interfere.
+        if (translateReady)
+        {
+            translateReadyElapsed = Time.time - _translateReadyStartTime;
+            if (translateReadyElapsed >= translateReadyTimeoutSeconds)
+                FinishTranslateCancel("timeout, no swipe");
+            return;
+        }
 
         switch (kind)
         {
@@ -434,6 +482,114 @@ public class GestureRouter : MonoBehaviour
         cameraPending = false;
         Debug.Log($"[Study Log][GestureRouter] {captureGestureName} interrupted by right pinch (handing over to Jackknife)");
         SendEvent(captureGestureName, "FAIL");
+        try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    // ====== Translate (two-stage) ======
+    // Stage 1 (here): Jackknife recognised "Translate" -> send READY, wait for swipe.
+    // Stage 2: palm-forward swipe -> send END + RECOGNIZED (handled in EvaluatePoseRecognition).
+    void EnterTranslateReady()
+    {
+        translateReady = true;
+        _translateReadyStartTime = Time.time;
+        translateReadyElapsed = 0f;
+        _nextTranslateReadyLogTime = Time.time + Mathf.Max(0.05f, translateReadyLogIntervalSeconds);
+        _swipeBuf.Clear();
+        swipeLeftwardDistance = 0f;
+        swipeLeftwardVelocity = 0f;
+        swipeReason = "";
+        Debug.Log($"[Study Log][GestureRouter] {translateGestureName} READY (waiting for right-palm leftward swipe, timeout {translateReadyTimeoutSeconds:F1}s)");
+        SendEvent(translateGestureName, "READY");
+    }
+
+    // Track the right palm's position in a sliding window and fire FinishTranslateMatch
+    // when leftward (relative to the camera) displacement and velocity both exceed
+    // their thresholds. No pose / palm-orientation checks -- intentionally simple.
+    void UpdateRightHandSwipe()
+    {
+        if (!translateReady) { if (_swipeBuf.Count > 0) _swipeBuf.Clear(); return; }
+        if (_handSubsystem == null && !TryGetHandSubsystem(out _handSubsystem))
+        { swipeReason = "no hand subsystem"; return; }
+
+        XRHand right = _handSubsystem.rightHand;
+        if (!right.isTracked) { swipeReason = "right hand not tracked"; _swipeBuf.Clear(); return; }
+        if (!right.GetJoint(XRHandJointID.Palm).TryGetPose(out Pose palmPose))
+        { swipeReason = "no right palm joint"; _swipeBuf.Clear(); return; }
+
+        Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
+        if (cam == null) { swipeReason = "no camera"; return; }
+
+        float now = Time.time;
+        _swipeBuf.Add(new SwipeSample { t = now, pos = palmPose.position });
+        // Drop stale samples outside the sliding window.
+        float cutoff = now - swipeWindowSeconds;
+        int firstKeep = 0;
+        while (firstKeep < _swipeBuf.Count && _swipeBuf[firstKeep].t < cutoff) firstKeep++;
+        if (firstKeep > 0) _swipeBuf.RemoveRange(0, firstKeep);
+        if (_swipeBuf.Count < 2) { swipeReason = $"buf={_swipeBuf.Count}"; return; }
+
+        // Leftward = -camera.right.
+        Vector3 camLeft = -cam.transform.right;
+        Vector3 disp = _swipeBuf[_swipeBuf.Count - 1].pos - _swipeBuf[0].pos;
+        swipeLeftwardDistance = Vector3.Dot(disp, camLeft);
+
+        var prev = _swipeBuf[_swipeBuf.Count - 2];
+        var cur  = _swipeBuf[_swipeBuf.Count - 1];
+        float dt = Mathf.Max(1e-4f, cur.t - prev.t);
+        swipeLeftwardVelocity = Vector3.Dot(cur.pos - prev.pos, camLeft) / dt;
+
+        if (swipeLeftwardDistance < swipeMinLeftwardDistance)
+        { swipeReason = $"dist {swipeLeftwardDistance:F2}m < {swipeMinLeftwardDistance:F2}m"; goto MaybeLog; }
+        if (swipeLeftwardVelocity < swipeMinLeftwardVelocity)
+        { swipeReason = $"vel {swipeLeftwardVelocity:F2} < {swipeMinLeftwardVelocity:F2}"; goto MaybeLog; }
+
+        swipeReason = $"SWIPE dist={swipeLeftwardDistance:F2}m vel={swipeLeftwardVelocity:F2}";
+        Debug.Log($"[Study Log][GestureRouter] swipe DETECTED ({swipeReason})");
+        _swipeBuf.Clear();
+        FinishTranslateMatch();
+        return;
+
+    MaybeLog:
+        if (verboseTranslateReadyLogging && Time.time >= _nextTranslateReadyLogTime)
+        {
+            _nextTranslateReadyLogTime = Time.time + Mathf.Max(0.05f, translateReadyLogIntervalSeconds);
+            float remaining = Mathf.Max(0f, translateReadyTimeoutSeconds - (Time.time - _translateReadyStartTime));
+            Debug.Log($"[Study Log][GestureRouter] {translateGestureName} READY {translateReadyElapsed:F1}s/{translateReadyTimeoutSeconds:F1}s " +
+                      $"(rem {remaining:F1}s) | swipe dist={swipeLeftwardDistance:F2}m (need>={swipeMinLeftwardDistance:F2}m) " +
+                      $"vel={swipeLeftwardVelocity:F2} (need>={swipeMinLeftwardVelocity:F2}) buf={_swipeBuf.Count} reason=[{swipeReason}]");
+        }
+    }
+
+    // Walk all hand subsystems, prefer one currently running. Same pattern as
+    // HandPoseRecognizer / CaptureControlCard.
+    private static List<XRHandSubsystem> s_subs;
+    static bool TryGetHandSubsystem(out XRHandSubsystem sub)
+    {
+        s_subs ??= new List<XRHandSubsystem>();
+        SubsystemManager.GetSubsystems(s_subs);
+        for (int i = 0; i < s_subs.Count; i++)
+            if (s_subs[i].running) { sub = s_subs[i]; return true; }
+        sub = s_subs.Count > 0 ? s_subs[0] : null;
+        return sub != null;
+    }
+
+    void FinishTranslateMatch()
+    {
+        translateReady = false;
+        lastRecognized = translateGestureName;
+        Debug.Log($"[Study Log][GestureRouter] {translateGestureName} RECOGNIZED via swipe (waited {translateReadyElapsed:F2}s)");
+        SendEvent(translateGestureName, "END");
+        SendEvent(translateGestureName, "RECOGNIZED");
+        try { OnCaptureRecognized?.Invoke(translateGestureName); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    void FinishTranslateCancel(string reason)
+    {
+        translateReady = false;
+        _swipeBuf.Clear();
+        lastRecognized = "translate-cancelled";
+        Debug.Log($"[Study Log][GestureRouter] {translateGestureName} cancelled ({reason})");
+        SendEvent(translateGestureName, "FAIL");
         try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
 
