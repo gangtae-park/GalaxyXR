@@ -16,11 +16,12 @@ the user is still in the camera-frame pose. Behaviour:
     grip. Hands held still at spawn pose -> card stays on object; hands move
     together by 10 cm -> card translates by 10 cm. If tracking on either
     hand is lost, the card just stays at its last good position.
-  - Width / height each frame = distance between the right-hand and left-hand
-    wrists, projected onto the card's local right / up axes. Wrist is chosen
-    over pinch position because the wrist barely moves during the pinch
-    micro-motion -- using pinch position made the rectangle jitter every time
-    the user prepared to pinch.
+  - Width / height starts at the bbox-derived initialWorldSize at spawn, then
+    each frame is adjusted by the DELTA of wrist separation from its baseline
+    (first-tracked-frame value), scaled by resizeSensitivity. So hands held in
+    the spawn pose -> card stays at initial size; spread hands by 10 cm with
+    sensitivity 0.5 -> card grows by 5 cm. Uses wrists (not pinch position)
+    because the wrist barely jitters during the pinch micro-motion.
   - Card billboards to the camera so it always faces the user.
   - Shutter trigger: both pinch actions pressed at the same time. Fires once
     via OnShutterFired (CaptureManager destroys the card).
@@ -45,6 +46,8 @@ public class CaptureControlCard : MonoBehaviour
     public Vector2 minWorldSize = new Vector2(0.08f, 0.08f);
     [Tooltip("Maximum world-space rectangle size (metres). Stops runaway when a hand is briefly tracked at a weird position.")]
     public Vector2 maxWorldSize = new Vector2(3f, 3f);
+    [Tooltip("Multiplier on hand-movement -> size change. 1.0 = move hands apart by 10 cm, card grows by 10 cm. 0.5 = card grows by 5 cm. Lower this if the rectangle feels jumpy.")]
+    [Range(0.05f, 2f)] public float resizeSensitivity = 0.5f;
 
     [Header("Pinch threshold")]
     [Range(0f, 1f)] public float pinchValueThreshold = 0.9f;
@@ -70,6 +73,8 @@ public class CaptureControlCard : MonoBehaviour
     private float _spawnTime;
     private bool _fired;
     private Vector3 _wristMidpointAtSpawn;
+    private Vector3 _baselineHandDiff;       // (rh - lh) at first tracked frame; size delta is measured from this
+    private Vector2 _initialWorldSize;       // bbox-derived size handed in at Initialize; the baseline for the rectangle
     private bool _haveWristBaseline;
 
     /// <summary>Called by CaptureManager right after Instantiate.</summary>
@@ -91,6 +96,7 @@ public class CaptureControlCard : MonoBehaviour
         // Baseline captured on the first frame BOTH wrists are tracked, not here --
         // wrists may not be available yet on the very frame of Initialize().
         _haveWristBaseline = false;
+        _initialWorldSize = initialWorldSize;
 
         transform.position = _centerWorldPos;
         BillboardToCamera();
@@ -119,10 +125,12 @@ public class CaptureControlCard : MonoBehaviour
             Vector3 midpoint = (rh + lh) * 0.5f;
             if (!_haveWristBaseline)
             {
-                // First frame both wrists are tracked: this midpoint becomes the
-                // "neutral" hand pose. From here, hand-midpoint displacement maps
-                // 1:1 to card displacement from the spawn anchor.
+                // First frame both wrists are tracked: this pose becomes the
+                // "neutral" reference. Position is anchored at the spawn point
+                // and resize starts at the bbox-derived initial size. Both
+                // adjust by DELTA from these baselines.
                 _wristMidpointAtSpawn = midpoint;
+                _baselineHandDiff = rh - lh;
                 _haveWristBaseline = true;
             }
             transform.position = _centerWorldPos + (midpoint - _wristMidpointAtSpawn);
@@ -161,13 +169,20 @@ public class CaptureControlCard : MonoBehaviour
 
     void ApplySizeFromHands(Vector3 rh, Vector3 lh)
     {
-        // Size is just the wrist separation projected onto the card's local axes
-        // -- independent of the centre point, so no reference offset is needed.
-        Vector3 diff = rh - lh;
-        float dx = Vector3.Dot(diff, transform.right);
-        float dy = Vector3.Dot(diff, transform.up);
-        float w = Mathf.Clamp(Mathf.Abs(dx), minWorldSize.x, maxWorldSize.x);
-        float h = Mathf.Clamp(Mathf.Abs(dy), minWorldSize.y, maxWorldSize.y);
+        // Delta-based resize: card size = initialWorldSize + (wrist-separation
+        // delta from baseline) * sensitivity. Both projections use the CURRENT
+        // local axes so billboard rotation drift cancels out.
+        Vector3 currentDiff  = rh - lh;
+        Vector3 baselineDiff = _baselineHandDiff;
+        float currentX  = Mathf.Abs(Vector3.Dot(currentDiff,  transform.right));
+        float currentY  = Mathf.Abs(Vector3.Dot(currentDiff,  transform.up));
+        float baselineX = Mathf.Abs(Vector3.Dot(baselineDiff, transform.right));
+        float baselineY = Mathf.Abs(Vector3.Dot(baselineDiff, transform.up));
+
+        float w = Mathf.Clamp(_initialWorldSize.x + (currentX - baselineX) * resizeSensitivity,
+                              minWorldSize.x, maxWorldSize.x);
+        float h = Mathf.Clamp(_initialWorldSize.y + (currentY - baselineY) * resizeSensitivity,
+                              minWorldSize.y, maxWorldSize.y);
         ApplySize(new Vector2(w, h));
     }
 

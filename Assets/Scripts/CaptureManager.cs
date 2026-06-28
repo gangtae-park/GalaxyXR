@@ -29,6 +29,8 @@ public class CaptureManager : MonoBehaviour
     [Header("Initial card sizing")]
     [Tooltip("World distance from the camera at which the YOLO bbox->world-size conversion is evaluated. Should match the gaze-snapshot depth used by ResultCardSpawner (gazeProjectionDistance, default 1.2 m).")]
     public float cardDepth = 1.2f;
+    [Tooltip("Multiplier applied to the bbox-derived world size before clamping. 1.0 = card spawns exactly at the YOLO bbox footprint; 0.5 = half that; 0.3 = thirty percent. Use this to dial down the initial card without touching code or PNG PPU.")]
+    [Range(0.05f, 2f)] public float bboxSizeMultiplier = 0.5f;
     [Tooltip("Floor for the initial card size on each axis (metres). Prevents an invisibly small card when the object's bbox is tiny.")]
     public Vector2 minInitialWorldSize = new Vector2(0.08f, 0.08f);
     [Tooltip("Fallback size used when bbox/frame_size data is missing from the payload.")]
@@ -103,8 +105,10 @@ public class CaptureManager : MonoBehaviour
         float visibleH = 2f * cardDepth * Mathf.Tan(fovY * 0.5f);
         float visibleW = visibleH * cam.aspect;
 
-        float worldW = (bboxW / frameSize[0]) * visibleW;
-        float worldH = (bboxH / frameSize[1]) * visibleH;
+        // Multiplier lets the user shrink the spawn footprint without changing
+        // the bbox or any other code; clamp still enforces the min size floor.
+        float worldW = (bboxW / frameSize[0]) * visibleW * bboxSizeMultiplier;
+        float worldH = (bboxH / frameSize[1]) * visibleH * bboxSizeMultiplier;
         return ClampToMin(new Vector2(worldW, worldH));
     }
 

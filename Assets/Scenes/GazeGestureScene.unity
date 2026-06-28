@@ -2291,11 +2291,10 @@ MonoBehaviour:
   captureControlCardPrefab: {fileID: 1878015464359111182, guid: 6a50ffc22288144d2b3394d1b7bf9ab7, type: 3}
   rightPinchAction: {fileID: 187161793506945269, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   leftPinchAction: {fileID: -6131295136447488360, guid: c348712bda248c246b8c49b3db54643f, type: 3}
-  rightPinchPositionAction: {fileID: -7813013294023911475, guid: c348712bda248c246b8c49b3db54643f, type: 3}
-  leftPinchPositionAction: {fileID: -2706128282752906596, guid: c348712bda248c246b8c49b3db54643f, type: 3}
-  cardDepth: 1.2
-  minInitialWorldSize: {x: 0.08, y: 0.08}
-  fallbackInitialWorldSize: {x: 0.3, y: 0.3}
+  cardDepth: 1.5
+  bboxSizeMultiplier: 0.2
+  minInitialWorldSize: {x: 0.02, y: 0.02}
+  fallbackInitialWorldSize: {x: 0.12, y: 0.12}
   verboseLogging: 1
 --- !u!4 &358138116
 Transform:
