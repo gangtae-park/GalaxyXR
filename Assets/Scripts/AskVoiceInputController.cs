@@ -3,26 +3,49 @@ using UnityEngine;
 using UnityEngine.Networking;
 
 /*
-Captures the user's spoken question while an AskQuestionCard is active and POSTs the raw WAV audio to MacProgram.
+Legacy/fallback controller.
 
-1) Watches ResultCardSpawner.PendingAskQuestion. When it transitions from null, starts a microphone recording.
-2) Monitors the recording's RMS level each frame:
-    - Until the first voice frame, just waits.
-    - Once voice has been detected, watches for `silenceHoldSeconds` of silence (RMS below `silenceThreshold`). On that mark, stops the mic.
-    - Hard cap at `maxRecordingSeconds` either way.
-3) On stop:
-    - encodes the recorded samples to a PCM-16 WAV byte buffer
-    - calls AskQuestionCard.NotifyThinking() (status -> "Thinking...")
-    - POSTs the WAV bytes to `voiceServerUrl`
+Captures the user's spoken question while an AskQuestionCard is active and
+POSTs the raw WAV audio to MacProgram. STT + GPT happen on the Python side.
+The default voice input flow now uses Android SpeechRecognizer and transcript
+text, so allowLegacyRecording stays false unless this fallback is explicitly
+re-enabled for comparison testing.
+
+Lifecycle:
+
+  1) Watches ResultCardSpawner.PendingAskQuestion. When it transitions
+     from null -> non-null (i.e. an AskQuestionCard was just spawned), starts
+     a microphone recording.
+
+  2) Monitors the recording's RMS level each frame:
+       - Until the first voice frame, just waits (user may take a moment).
+       - Once voice has been detected, watches for `silenceHoldSeconds` of
+         silence (RMS below `silenceThreshold`). On that mark, stops the mic.
+       - Hard cap at `maxRecordingSeconds` either way.
+
+  3) On stop:
+       - encodes the recorded samples to a PCM-16 WAV byte buffer
+       - calls AskQuestionCard.NotifyThinking()  (status -> "Thinking...")
+       - POSTs the WAV bytes to `voiceServerUrl`
+
+  4) If the AskQuestionCard is destroyed before the recording finishes (user
+     closed it, or AskResultCard replaced it), the recording is cancelled.
+
+Android requires the RECORD_AUDIO permission. Make sure the Player Settings or
+your AndroidManifest declares it.
 */
 
 public class AskVoiceInputController : MonoBehaviour
 {
+    [Header("Legacy / fallback")]
+    [Tooltip("Keep false for the Android STT transcript flow. Turn on only when intentionally testing the old WAV upload path.")]
+    public bool allowLegacyRecording = false;
+
     [Header("Refs")]
     public ResultCardSpawner spawner;
 
     [Header("Network")]
-    public string voiceServerUrl = "http://192.168.0.8:5007/ask_voice";
+    public string voiceServerUrl = "http://192.168.0.3:5007/ask_voice";
 
     [Header("Microphone")]
     public int sampleRate = 16000;
@@ -43,9 +66,26 @@ public class AskVoiceInputController : MonoBehaviour
     private string _micDevice;
     private float _recordStartTime;
     private float _lastVoiceTime;
+    private bool _loggedLegacyDisabled;
+
+    void Start()
+    {
+        if (!allowLegacyRecording)
+            Debug.Log("[AskVoice] Legacy WAV recorder is disabled. Android STT voice input should provide transcripts instead.");
+    }
 
     void Update()
     {
+        if (!allowLegacyRecording)
+        {
+            if (!_loggedLegacyDisabled)
+            {
+                _loggedLegacyDisabled = true;
+                Debug.Log("[AskVoice] Legacy recording skipped because allowLegacyRecording=false.");
+            }
+            return;
+        }
+
         AskQuestionCard current = spawner != null ? spawner.PendingAskQuestion : null;
 
         if (current != _activeCard)
@@ -60,7 +100,21 @@ public class AskVoiceInputController : MonoBehaviour
 
     void OnDisable()
     {
-        if (isRecording) CancelRecording("controller disabled");
+        HideListeningPanel("controller disabled");
+    }
+
+    public void HideListeningPanel(string reason = "cleanup")
+    {
+        if (isRecording) CancelRecording(reason);
+        if (spawner == null) spawner = FindObjectOfType<ResultCardSpawner>();
+        if (spawner != null) spawner.ClearVoiceListeningCards($"legacy_{reason}");
+
+        if (_activeCard != null)
+        {
+            _activeCard.Close();
+            _activeCard = null;
+            Debug.Log($"[VOICE_UI] legacy listening panel hidden reason={reason}");
+        }
     }
 
     void StartRecording()

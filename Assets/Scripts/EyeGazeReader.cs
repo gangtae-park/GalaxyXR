@@ -40,6 +40,9 @@ public class EyeGazeReader : MonoBehaviour
     {
         gazeRotationAction?.action.Disable();
         gazeTrackingStateAction?.action.Disable();
+        LatestIsTracked = false;
+        LatestGazeDirection = Vector3.zero;
+        if (marker != null) marker.gameObject.SetActive(false);
     }
 
     void Update()

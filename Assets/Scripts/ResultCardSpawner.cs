@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 
 /*
@@ -10,7 +11,7 @@ that produce a card -- not just Search/Find Info.
 
 Responsibilities:
 
-  1) On every gesture END from PinchPosegestureRouter, snapshot the user's
+  1) On every gesture END from GestureRouter, snapshot the user's
      gaze world position. The card spawn position is THIS snapshot + a fixed
      right-and-up offset, so cards always appear where the user was looking
      plus a bit upper-right, never moving once placed.
@@ -22,8 +23,10 @@ Responsibilities:
                               user's voice-question via card.OnQuestionSubmitted;
                               pass the captured question to MsgSender.SendAskQuestion
        "Ask"  + with answer-> destroy any AskQuestionCard, spawn AskResultCard
-                              with (name, question, answer)
-       (other gestures)    -> hook later (Translate, Compare, ...)
+       "VoiceAsk"         -> spawn a voice result card directly; never spawn
+                              the listening AskQuestionCard from a server response
+       other gestures     -> spawn compact generic cards using the mapping in
+                              HandleResult without changing backend semantics
 
   3) replacePreviousCard = true ensures only one card is alive at a time, so a
      new gesture cleanly replaces the previous result on screen.
@@ -57,6 +60,24 @@ public class ResultCardSpawner : MonoBehaviour
     [Tooltip("Maximum simultaneous anchor pins. 0 = unlimited. When exceeded the oldest is destroyed (FIFO).")]
     public int maxAnchors = 0;
 
+    [Header("Reference AR style")]
+    public bool applyReferencePanelStyle = true;
+    public Color panelBackgroundColor = new Color(0.20f, 0.45f, 1.0f, 0.55f);
+    public Color panelBorderColor = new Color(0.72f, 0.88f, 1.0f, 0.78f);
+    public Color panelTextColor = Color.white;
+    public Color panelSecondaryTextColor = new Color(0.92f, 0.97f, 1.0f, 0.92f);
+    public Vector2 infoPanelSize = new Vector2(380f, 160f);
+    public Vector2 askPanelSize = new Vector2(430f, 150f);
+    public Vector2 answerPanelSize = new Vector2(500f, 240f);
+    public Vector2 comparePanelSize = new Vector2(440f, 190f);
+    public Vector2 translationPanelSize = new Vector2(380f, 150f);
+    public Vector2 statusPanelSize = new Vector2(320f, 95f);
+    public Vector2 sensorPanelSize = new Vector2(350f, 190f);
+    public bool showTargetBoundingBox = true;
+    public Vector2 targetBoundingBoxSize = new Vector2(0.45f, 0.35f);
+    public Color targetBoundingBoxColor = new Color(0.45f, 0.70f, 1.0f, 0.9f);
+    public float targetBoundingBoxLineWidth = 0.006f;
+
     [Header("Spawn position (relative to gaze)")]
     [Tooltip("Distance from the camera along the gaze direction where the card 'anchor' lands.")]
     public float gazeProjectionDistance = 1.2f;
@@ -70,6 +91,7 @@ public class ResultCardSpawner : MonoBehaviour
     public bool verboseLogging = true;
 
     private GameObject _currentCard;
+    private ARBoundingBoxVisual _currentTargetBounds;
     private AskQuestionCard _pendingAskQuestion;
     private Vector3 _lastGazeWorldPos;
     private bool _haveGazeSnapshot;
@@ -79,6 +101,7 @@ public class ResultCardSpawner : MonoBehaviour
     /// or null if no Ask flow is in progress. Voice recognition components can read
     /// this and call .Submit(text) when they have the transcript.</summary>
     public AskQuestionCard PendingAskQuestion => _pendingAskQuestion;
+    public bool HasPendingVoiceListeningCard => _pendingAskQuestion != null && IsVoiceListeningCard(_pendingAskQuestion);
 
     void OnEnable()
     {
@@ -96,10 +119,15 @@ public class ResultCardSpawner : MonoBehaviour
 
     void HandleGestureRecognized(string gestureName)
     {
+        CaptureCurrentGazeSnapshot($"gesture END '{gestureName}'");
+    }
+
+    public void CaptureCurrentGazeSnapshot(string reason)
+    {
         _lastGazeWorldPos = ComputeGazeWorldPosition();
         _haveGazeSnapshot = true;
         if (verboseLogging)
-            Debug.Log($"[ResultCardSpawner] gesture END '{gestureName}' -> gaze snapshot {_lastGazeWorldPos}");
+            Debug.Log($"[ResultCardSpawner] {reason} -> gaze snapshot {_lastGazeWorldPos}");
     }
 
     Vector3 ComputeGazeWorldPosition()
@@ -135,6 +163,12 @@ public class ResultCardSpawner : MonoBehaviour
         if (payload == null) return;
         string gesture = payload.gesture;
         if (string.IsNullOrEmpty(gesture)) return;
+        if (gesture == "ObjectUI") return;
+        if (gesture == "VoiceAsk")
+        {
+            SpawnVoiceResultCard(payload);
+            return;
+        }
 
         // Anchor handles fail at the spawner level (status=="fail" -> skip).
         // The other cards typically still want to render something on fail
@@ -175,6 +209,39 @@ public class ResultCardSpawner : MonoBehaviour
 
             case "Translate":
                 SpawnTranslateResult(payload);
+                break;
+
+            case "Compare":
+                SpawnGenericResult(payload, ARPanelLayoutKind.CompareCard);
+                break;
+
+            case "Capture":
+                SpawnGenericResult(payload, ARPanelLayoutKind.StatusCard);
+                break;
+
+            case "Save":
+            case "Store":
+                SpawnGenericResult(payload, ARPanelLayoutKind.NoteCard);
+                break;
+
+            case "Mark":
+            case "Anchor":
+                SpawnGenericResult(payload, ARPanelLayoutKind.AnchorCard);
+                break;
+
+            case "Activate":
+            case "Deactivate":
+                SpawnGenericResult(payload, ARPanelLayoutKind.StatusCard);
+                break;
+
+            case "Set":
+            case "Change":
+                SpawnGenericResult(payload, ARPanelLayoutKind.ControlCard);
+                break;
+
+            case "Read":
+            case "Sense":
+                SpawnGenericResult(payload, ARPanelLayoutKind.SensorCard);
                 break;
 
             default:
@@ -380,19 +447,89 @@ public class ResultCardSpawner : MonoBehaviour
         ReplaceCurrentCard();
 
         GameObject go = Instantiate(searchResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+        ApplyPanelLayout(go, ARPanelLayoutKind.InfoCard);
         var card = go.GetComponent<SearchResultCard>();
         if (card != null)
             card.SetContent(payload.response.name, payload.response.result_search);
         _currentCard = go;
+        ShowTargetBoundsIfAvailable(payload);
         if (verboseLogging)
             Debug.Log($"[ResultCardSpawner] spawned SearchResultCard name='{payload.response.name}'");
     }
 
     // ---------- Ask (two-step) ----------
 
+    void SpawnVoiceResultCard(VlmResultReceiver.VlmResultPayload payload)
+    {
+        ClearVoiceListeningCards("voice_response");
+        ClearAskQuestionCardForVoiceResponse("voice_response");
+
+        string requestId = FirstNonEmpty(
+            payload != null ? payload.request_id : "",
+            payload != null ? payload.requestId : "");
+        string transcript = payload != null && payload.target_meta != null
+            ? payload.target_meta.user_question
+            : "";
+        string answer = VoiceResultBody(payload);
+        string title = VoiceResultTitle(payload);
+
+        Debug.Log($"[VOICE_RESULT] server response received request_id={requestId}");
+        Debug.Log($"[VOICE_RESULT] transcript='{transcript}'");
+        Debug.Log($"[VOICE_RESULT] answer='{answer}'");
+
+        if (string.IsNullOrWhiteSpace(answer))
+        {
+            string name = payload != null && payload.response != null ? payload.response.name : "";
+            if (IsVoiceRequestName(name))
+                Debug.LogWarning("[VOICE_RESULT][WARN] ignored placeholder name='Voice request'");
+            else
+                Debug.LogWarning($"[VOICE_RESULT][WARN] voice response has no displayable result request_id={requestId}");
+            return;
+        }
+
+        Debug.Log($"[VOICE_RESULT] spawning result card title='{title}'");
+        ReplaceCurrentCard();
+
+        if (askResultCardPrefab != null)
+        {
+            GameObject go = Instantiate(askResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+            ApplyPanelLayout(go, ARPanelLayoutKind.AnswerCard);
+            var card = go.GetComponent<AskResultCard>();
+            if (card != null) card.SetContent(title, transcript, answer);
+            _currentCard = go;
+            Debug.Log($"[RESULT_CARD] spawned VoiceResultCard request_id={requestId}");
+            return;
+        }
+
+        if (searchResultCardPrefab != null)
+        {
+            GameObject go = Instantiate(searchResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+            ApplyPanelLayout(go, ARPanelLayoutKind.InfoCard);
+            var card = go.GetComponent<SearchResultCard>();
+            if (card != null) card.SetContent(title, answer);
+            _currentCard = go;
+            Debug.Log($"[RESULT_CARD] spawned VoiceResultCard request_id={requestId}");
+            return;
+        }
+
+        Debug.LogWarning("[VOICE_RESULT][WARN] no result card prefab assigned for voice response.");
+    }
+
     void DispatchAsk(VlmResultReceiver.VlmResultPayload payload)
     {
         bool hasAnswer = !string.IsNullOrEmpty(payload.response.answer);
+        bool failed = payload.status != null
+            && payload.status.Equals("fail", System.StringComparison.OrdinalIgnoreCase);
+
+        if (failed && !hasAnswer)
+        {
+            payload.response.answer = FirstNonEmpty(
+                payload.response != null ? payload.response.error : "",
+                payload.reason,
+                "No answer was returned.");
+            hasAnswer = true;
+        }
+
         if (!hasAnswer) SpawnAskQuestion(payload);
         else            SpawnAskResult(payload);
     }
@@ -407,6 +544,7 @@ public class ResultCardSpawner : MonoBehaviour
         ReplaceCurrentCard();
 
         GameObject go = Instantiate(askQuestionCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+        ApplyPanelLayout(go, ARPanelLayoutKind.AskCard);
         var card = go.GetComponent<AskQuestionCard>();
         if (card != null)
         {
@@ -415,6 +553,7 @@ public class ResultCardSpawner : MonoBehaviour
             _pendingAskQuestion = card;
         }
         _currentCard = go;
+        ShowTargetBoundsIfAvailable(payload);
         if (verboseLogging)
             Debug.Log($"[ResultCardSpawner] spawned AskQuestionCard name='{payload.response.name}'");
     }
@@ -451,15 +590,237 @@ public class ResultCardSpawner : MonoBehaviour
         _pendingAskQuestion = null;
 
         GameObject go = Instantiate(askResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+        ApplyPanelLayout(go, ARPanelLayoutKind.AnswerCard);
         var card = go.GetComponent<AskResultCard>();
         if (card != null)
-            card.SetContent(payload.response.name, question, payload.response.answer);
+            card.SetContent(DisplayNameForAskResult(payload), question, payload.response.answer);
         _currentCard = go;
         if (verboseLogging)
             Debug.Log($"[ResultCardSpawner] spawned AskResultCard name='{payload.response.name}'");
     }
 
+    // ---------- Generic mapped panels ----------
+
+    void SpawnGenericResult(VlmResultReceiver.VlmResultPayload payload, ARPanelLayoutKind layoutKind)
+    {
+        if (searchResultCardPrefab == null)
+        {
+            Debug.LogWarning("[ResultCardSpawner] generic panel fallback requires searchResultCardPrefab.");
+            return;
+        }
+        ReplaceCurrentCard();
+
+        GameObject go = Instantiate(searchResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+        ApplyPanelLayout(go, layoutKind);
+        var card = go.GetComponent<SearchResultCard>();
+        if (card != null)
+            card.SetContent(BuildGenericTitle(payload, layoutKind), BuildGenericBody(payload, layoutKind));
+        _currentCard = go;
+
+        if (layoutKind == ARPanelLayoutKind.CompareCard || layoutKind == ARPanelLayoutKind.SensorCard)
+            ShowTargetBoundsIfAvailable(payload);
+
+        if (verboseLogging)
+            Debug.Log($"[ResultCardSpawner] spawned generic {layoutKind} for gesture='{payload.gesture}'");
+    }
+
+    static string BuildGenericTitle(VlmResultReceiver.VlmResultPayload payload, ARPanelLayoutKind layoutKind)
+    {
+        string name = payload != null && payload.response != null ? payload.response.name : "";
+        if (!string.IsNullOrEmpty(name)) return name;
+
+        string gesture = payload != null ? payload.gesture : "";
+        switch (layoutKind)
+        {
+            case ARPanelLayoutKind.CompareCard: return "Compare";
+            case ARPanelLayoutKind.NoteCard: return "Note";
+            case ARPanelLayoutKind.AnchorCard: return "Marker anchored";
+            case ARPanelLayoutKind.SensorCard: return "Read / Sense";
+            case ARPanelLayoutKind.ControlCard: return "Set / Change";
+            case ARPanelLayoutKind.StatusCard:
+                return string.IsNullOrEmpty(gesture) ? "Status" : gesture;
+            default:
+                return string.IsNullOrEmpty(gesture) ? "Status" : gesture;
+        }
+    }
+
+    static string BuildGenericBody(VlmResultReceiver.VlmResultPayload payload, ARPanelLayoutKind layoutKind)
+    {
+        VlmResultReceiver.VlmResponse response = payload != null ? payload.response : null;
+        string best = FirstNonEmpty(
+            response != null ? response.answer : "",
+            response != null ? response.info : "",
+            response != null ? response.description : "",
+            response != null ? response.result_search : "",
+            response != null ? response.translation : "",
+            response != null ? response.raw : ""
+        );
+
+        if (!string.IsNullOrEmpty(best))
+            return layoutKind == ARPanelLayoutKind.CompareCard ? CompactPlainText(best) : best;
+
+        string gesture = payload != null ? payload.gesture : "";
+        switch (layoutKind)
+        {
+            case ARPanelLayoutKind.StatusCard:
+                if (gesture == "Activate") return "Activated";
+                if (gesture == "Deactivate") return "Deactivated";
+                return "Image captured and saved";
+            case ARPanelLayoutKind.NoteCard:
+                return "Saved memo or extracted information will appear here.";
+            case ARPanelLayoutKind.AnchorCard:
+                return "Marker anchored";
+            case ARPanelLayoutKind.SensorCard:
+                return "CO2      --\nHCHO     --\nTVOC     --\nTEMP     --\nHUMI     --";
+            case ARPanelLayoutKind.ControlCard:
+                return "Control panel placeholder";
+            case ARPanelLayoutKind.CompareCard:
+                return "Comparison result unavailable.";
+            default:
+                return "";
+        }
+    }
+
+    static string CompactPlainText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        string[] lines = text.Split('\n');
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i].Trim();
+            if (line.Length == 0) continue;
+            if (builder.Length > 0) builder.Append('\n');
+            builder.Append(line);
+        }
+        return builder.ToString();
+    }
+
+    static string FirstNonEmpty(params string[] values)
+    {
+        if (values == null) return "";
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (!string.IsNullOrWhiteSpace(values[i])) return values[i];
+        }
+        return "";
+    }
+
+    static bool IsVoiceListeningCard(AskQuestionCard card)
+    {
+        return card != null && IsVoiceRequestName(card.ObjectName);
+    }
+
+    static bool IsVoiceRequestName(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            && value.Trim().Equals("Voice request", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    static string DisplayNameForAskResult(VlmResultReceiver.VlmResultPayload payload)
+    {
+        return payload != null && payload.response != null ? payload.response.name : "";
+    }
+
+    static string VoiceResultTitle(VlmResultReceiver.VlmResultPayload payload)
+    {
+        string name = payload != null && payload.response != null ? payload.response.name : "";
+        if (!IsVoiceRequestName(name) && !string.IsNullOrWhiteSpace(name))
+            return name;
+        return "Voice result";
+    }
+
+    static string VoiceResultBody(VlmResultReceiver.VlmResultPayload payload)
+    {
+        VlmResultReceiver.VlmResponse response = payload != null ? payload.response : null;
+        return FirstNonEmpty(
+            response != null ? response.answer : "",
+            response != null ? response.result : "",
+            response != null ? response.text : "",
+            response != null ? response.result_search : "",
+            response != null ? response.info : "",
+            response != null ? response.description : "",
+            response != null ? response.raw : "",
+            response != null ? response.error : "",
+            payload != null ? payload.reason : "");
+    }
+
     // ---------- helpers ----------
+
+    public void ClearVoiceListeningCards(string reason = "cleanup")
+    {
+        bool removed = false;
+
+        if (_pendingAskQuestion != null && IsVoiceListeningCard(_pendingAskQuestion))
+        {
+            _pendingAskQuestion.OnQuestionSubmitted -= HandleQuestionSubmitted;
+            GameObject cardObject = _pendingAskQuestion.gameObject;
+            if (cardObject != null) Destroy(cardObject);
+            if (_currentCard == cardObject) _currentCard = null;
+            _pendingAskQuestion = null;
+            removed = true;
+        }
+
+        if (_currentCard != null)
+        {
+            AskQuestionCard card = _currentCard.GetComponent<AskQuestionCard>();
+            if (card != null && IsVoiceListeningCard(card))
+            {
+                if (_pendingAskQuestion == card)
+                {
+                    card.OnQuestionSubmitted -= HandleQuestionSubmitted;
+                    _pendingAskQuestion = null;
+                }
+                Destroy(_currentCard);
+                _currentCard = null;
+                removed = true;
+            }
+        }
+
+        if (removed)
+            Debug.Log($"[VOICE_UI] listening panel hidden reason={reason}");
+    }
+
+    bool ClearAskQuestionCardForVoiceResponse(string reason)
+    {
+        bool removed = false;
+
+        if (_pendingAskQuestion != null)
+        {
+            _pendingAskQuestion.OnQuestionSubmitted -= HandleQuestionSubmitted;
+            GameObject cardObject = _pendingAskQuestion.gameObject;
+            if (cardObject != null) Destroy(cardObject);
+            if (_currentCard == cardObject) _currentCard = null;
+            _pendingAskQuestion = null;
+            removed = true;
+        }
+
+        if (_currentCard != null)
+        {
+            AskQuestionCard card = _currentCard.GetComponent<AskQuestionCard>();
+            if (card != null)
+            {
+                Destroy(_currentCard);
+                _currentCard = null;
+                removed = true;
+            }
+        }
+
+        if (removed)
+        {
+            Debug.LogWarning("[VOICE_RESULT][WARN] response routed to listening card; forcing result mode");
+            Debug.Log($"[VOICE_UI] listening panel hidden reason={reason}");
+        }
+
+        return removed;
+    }
+
+    public void RemoveCardsBySource(string source)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return;
+        if (source == "voice-listening" || source == "voice")
+            ClearVoiceListeningCards(source);
+    }
 
     void ReplaceCurrentCard()
     {
@@ -474,5 +835,60 @@ public class ResultCardSpawner : MonoBehaviour
             Destroy(_currentCard);
             _currentCard = null;
         }
+        if (_currentTargetBounds != null)
+        {
+            Destroy(_currentTargetBounds.gameObject);
+            _currentTargetBounds = null;
+        }
+    }
+
+    void ApplyPanelLayout(GameObject go, ARPanelLayoutKind layoutKind)
+    {
+        if (!applyReferencePanelStyle || go == null) return;
+        ARPanelStyle style = ARPanelStyle.ApplyTo(go, layoutKind);
+        if (style == null) return;
+
+        style.backgroundColor = panelBackgroundColor;
+        style.borderColor = panelBorderColor;
+        style.textColor = panelTextColor;
+        style.secondaryTextColor = panelSecondaryTextColor;
+        style.infoSize = infoPanelSize;
+        style.askSize = askPanelSize;
+        style.answerSize = answerPanelSize;
+        style.compareSize = comparePanelSize;
+        style.translationSize = translationPanelSize;
+        style.statusSize = statusPanelSize;
+        style.sensorSize = sensorPanelSize;
+        style.Apply();
+    }
+
+    void ShowTargetBoundsIfAvailable(VlmResultReceiver.VlmResultPayload payload)
+    {
+        if (!showTargetBoundingBox || payload == null || !HasTargetBounds(payload.target_meta)) return;
+
+        if (_currentTargetBounds != null)
+            Destroy(_currentTargetBounds.gameObject);
+
+        Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
+        Vector3 center = _haveGazeSnapshot ? _lastGazeWorldPos : ComputeGazeWorldPosition();
+        _currentTargetBounds = ARBoundingBoxVisual.Create(
+            center,
+            cam,
+            targetBoundingBoxSize,
+            targetBoundingBoxColor,
+            targetBoundingBoxLineWidth,
+            30f
+        );
+    }
+
+    static bool HasTargetBounds(VlmResultReceiver.VlmTargetMeta meta)
+    {
+        if (meta == null) return false;
+        return HasBox(meta.bbox) || HasBox(meta.crop_bbox) || HasBox(meta.gaze_bbox);
+    }
+
+    static bool HasBox(float[] box)
+    {
+        return box != null && box.Length >= 4;
     }
 }
