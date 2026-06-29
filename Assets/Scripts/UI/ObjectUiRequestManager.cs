@@ -157,11 +157,21 @@ public class ObjectUiRequestManager : MonoBehaviour
         _requestRoutine = null;
     }
 
+    // We no longer capture the Unity screen and ship the JPG to Python --
+    // Unity's ScreenCapture on Android XR only sees its own rendered output
+    // (passthrough video is OS-composited and never reaches the framebuffer),
+    // so YOLO always saw a blank image and detected nothing.
+    //
+    // Instead we send a minimal trigger; the Python /object_ui handler now
+    // runs YOLO against state.latest_frame -- the ADB screenrecord stream the
+    // MacProgram already pulls from the device, which captures the FINAL
+    // composited display (passthrough + Unity overlays) and is the same
+    // source the gesture handlers (Search/Anchor/Save/etc.) already use.
     IEnumerator CaptureAndSend(string requestId)
     {
         ResolveReferences();
         state = RequestState.SendingToServer;
-        Debug.Log($"[OBJECT_UI] Capture started request_id={requestId}");
+        Debug.Log($"[OBJECT_UI] Trigger fired request_id={requestId}");
 
         Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
         CapturePoseSnapshot capturePose = CapturePoseSnapshot.From(cam);
@@ -170,35 +180,17 @@ public class ObjectUiRequestManager : MonoBehaviour
         CaptureGazeViewport(cam, out _captureGazeViewport, out _hasCaptureGazeViewport);
         Debug.Log($"[OBJECT_UI] capture_gaze tracked={_hasCaptureGazeViewport} viewport=({_captureGazeViewport.x:F3},{_captureGazeViewport.y:F3}) request_id={requestId}");
 
-        yield return new WaitForEndOfFrame();
+        // Register camera pose with image dims = 0 -- the actual frame size
+        // comes from Python (ADB stream) and is echoed back in the response
+        // (image_width / image_height in the VLM_RESULT). DetectedObjectAnchorResolver
+        // uses the response dims to project bbox -> world.
+        RegisterCapturePose(requestId, 0, 0, capturePose);
 
-        Texture2D texture = null;
-        byte[] jpg = null;
-        try
-        {
-            texture = ScreenCapture.CaptureScreenshotAsTexture();
-            if (texture == null || texture.width <= 0 || texture.height <= 0)
-            {
-                Debug.LogError($"[OBJECT_UI][ERROR] capture failed image=0x0 request_id={requestId}");
-                state = RequestState.Idle;
-                activeRequestId = "";
-                yield break;
-            }
-
-            jpg = ImageConversion.EncodeToJPG(texture, Mathf.Clamp(jpegQuality, 1, 100));
-            Debug.Log($"[OBJECT_UI] Captured image={texture.width}x{texture.height} bytes={jpg.Length} request_id={requestId}");
-            RegisterCapturePose(requestId, texture.width, texture.height, capturePose);
-
-            ObjectUiImagePayload payload = BuildPayload(requestId, texture.width, texture.height, jpg, capturePose);
-            yield return PostPayload(payload);
-        }
-        finally
-        {
-            if (texture != null) Destroy(texture);
-        }
+        ObjectUiImagePayload payload = BuildPayload(requestId, capturePose);
+        yield return PostPayload(payload);
     }
 
-    ObjectUiImagePayload BuildPayload(string requestId, int imageWidth, int imageHeight, byte[] jpg, CapturePoseSnapshot capturePose)
+    ObjectUiImagePayload BuildPayload(string requestId, CapturePoseSnapshot capturePose)
     {
         return new ObjectUiImagePayload
         {
@@ -208,10 +200,12 @@ public class ObjectUiRequestManager : MonoBehaviour
             capture_time = Time.unscaledTime,
             screen_width = capturePose.screenWidth,
             screen_height = capturePose.screenHeight,
-            image_width = imageWidth,
-            image_height = imageHeight,
-            image_mime = "image/jpeg",
-            image_base64 = Convert.ToBase64String(jpg),
+            // image_width / image_height intentionally 0: server uses its own ADB-stream
+            // frame and reports the actual dims in the response.
+            image_width = 0,
+            image_height = 0,
+            image_mime = "",
+            image_base64 = "",
             gaze_tracked = _hasCaptureGazeViewport,
             gaze_viewport_x = _captureGazeViewport.x,
             gaze_viewport_y = _captureGazeViewport.y,

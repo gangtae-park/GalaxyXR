@@ -178,7 +178,8 @@ public static class ObjectDetectionBubbleSetupEditor
         text.resizeTextMinSize = 8;
         text.resizeTextMaxSize = fontSize;
         text.raycastTarget = false;
-        text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        // Arial.ttf was retired from Unity's built-in resources; the new name is LegacyRuntime.ttf.
+        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         return text;
     }
 
