@@ -136,7 +136,7 @@ public class MsgSender : MonoBehaviour
         if (appendRequestIdToOutgoingPackets && !string.IsNullOrEmpty(requestId))
             msg = string.Join(",", msg, requestId);
 
-        Debug.Log($"[Study Log][SENDER] Sending gesture event packet: {msg}");
+        // Debug.Log($"[Study Log][SENDER] Sending gesture event packet: {msg}");
 
         seq++;
         SendPacket(msg);
@@ -260,8 +260,8 @@ public class MsgSender : MonoBehaviour
         byte[] data = Encoding.UTF8.GetBytes(msg);
         client.Send(data, data.Length, serverIP, port);
 
-        if (!msg.StartsWith("GAZE,"))
-            Debug.Log($"[Study Log][SENDER] Packet sent to {serverIP}:{port} | {msg}");
+        // if (!msg.StartsWith("GAZE,"))
+        //     Debug.Log($"[Study Log][SENDER] Packet sent to {serverIP}:{port} | {msg}");
     }
 
     string RegisterCaptureContext(string reason)
