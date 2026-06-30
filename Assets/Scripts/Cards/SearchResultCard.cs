@@ -16,7 +16,6 @@ public class SearchResultCard : MonoBehaviour
 
     void Awake()
     {
-        ARPanelStyle.ApplyTo(gameObject, ARPanelLayoutKind.InfoCard);
         _destroyAt = Time.time + autoDestroySeconds;
         if (closeButton != null) closeButton.onClick.AddListener(Close);
     }

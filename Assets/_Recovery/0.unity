@@ -6999,12 +6999,12 @@ MonoBehaviour:
   captureManager: {fileID: 358138115}
   maxAnchors: 0
   gazeProjectionDistance: 0.8
-  objectDepthScale: 0.5
+  objectDepthScale: 1
   groupAHorizontalOffset: 0.12
   groupAVerticalOffset: 0.08
   groupAPullTowardUser: 0.15
   groupBPullTowardUser: 0
-  anchorAboveOffset: 0.12
+  anchorAboveOffset: 0.06
   enforceConstantApparentSize: 1
   constantSizeReferenceDistance: 1.2
   constantSizeFloorAtAuthored: 1
@@ -14352,7 +14352,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6614100000000000000}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d22a61f704664d33a67a8d28eb7af178, type: 3}
   m_Name: 
@@ -14422,7 +14422,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6614100000000000000}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 501cdb6010f94b84bd9d793764d7e266, type: 3}
   m_Name: 
@@ -14600,7 +14600,7 @@ MonoBehaviour:
   bubbleDistanceMeters: 1.2
   bubbleVerticalOffsetMeters: 0.04
   bubbleForwardOffsetMeters: 0.03
-  depthScaleFactor: 0.5
+  depthScaleFactor: 1
   clearPreviousOnShow: 1
   autoCreateRuntimeBubblePrefab: 1
   verboseLogging: 1
@@ -14629,7 +14629,6 @@ MonoBehaviour:
   anchorResolver: {fileID: 6614300000000000004}
   commandBridge: {fileID: 6614300000000000005}
   referenceCamera: {fileID: 1948693200}
-  menuFontAsset: {fileID: 11400000, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}
   filterByConfidence: 0
   confidenceThreshold: 0.25
   minBboxSize: 0.005
@@ -14637,10 +14636,6 @@ MonoBehaviour:
   cameraForwardOffset: 0.15
   menuScale: 0.0012
   menuLifetimeSeconds: 20
-  enforceConstantApparentSize: 1
-  constantSizeReferenceDistance: 1.2
-  constantSizeFloorAtAuthored: 1
-  constantSizeMaxMultiplier: 4
   verboseLogging: 1
 --- !u!114 &6614300000000000004
 MonoBehaviour:
@@ -14677,9 +14672,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ObjectActionCommandBridge
   msgSender: {fileID: 0}
   interactionLogger: {fileID: 0}
-  resultCardSpawner: {fileID: 0}
   autoFindReferences: 1
-  verboseLogging: 1
 --- !u!114 &6614300000000000006
 MonoBehaviour:
   m_ObjectHideFlags: 0

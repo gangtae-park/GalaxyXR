@@ -17,7 +17,6 @@ public class AskResultCard : MonoBehaviour
 
     void Awake()
     {
-        ARPanelStyle.ApplyTo(gameObject, ARPanelLayoutKind.AnswerCard);
         _destroyAt = Time.time + autoDestroySeconds;
         if (closeButton != null) closeButton.onClick.AddListener(Close);
     }

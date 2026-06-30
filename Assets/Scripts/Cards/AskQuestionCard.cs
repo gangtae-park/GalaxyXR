@@ -21,7 +21,6 @@ public class AskQuestionCard : MonoBehaviour
 
     void Awake()
     {
-        ARPanelStyle.ApplyTo(gameObject, ARPanelLayoutKind.AskCard);
         if (closeButton != null) closeButton.onClick.AddListener(Close);
         if (statusText != null) statusText.text = listeningMessage;
     }

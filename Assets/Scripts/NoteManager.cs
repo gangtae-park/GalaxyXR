@@ -87,6 +87,7 @@ public class NoteManager : MonoBehaviour
     void SpawnSaveCard(string objectId, string objectName, string existingText, Vector3 pos, Quaternion rot)
     {
         var go = Instantiate(saveNoteCardPrefab, pos, rot);
+        EnsureConstantSize(go);
         var card = go.GetComponent<SaveNoteCard>();
         if (card == null)
         {
@@ -163,6 +164,7 @@ public class NoteManager : MonoBehaviour
         var go = Instantiate(stickyNotePrefab, pos, rot);
         if (!Mathf.Approximately(stickyNoteScale, 1f))
             go.transform.localScale *= Mathf.Max(0.001f, stickyNoteScale);
+        EnsureConstantSize(go);
         var sticky = go.GetComponent<StickyNote>();
         if (sticky == null)
         {
@@ -198,6 +200,7 @@ public class NoteManager : MonoBehaviour
         }
         var rot = note.stickyInstance != null ? note.stickyInstance.transform.rotation : Quaternion.identity;
         var go = Instantiate(viewNoteCardPrefab, note.worldPos, rot);
+        EnsureConstantSize(go);
         var view = go.GetComponent<ViewNoteCard>();
         if (view == null)
         {
@@ -241,5 +244,15 @@ public class NoteManager : MonoBehaviour
         for (int i = 0; i < _notes.Count; i++)
             if (_notes[i].id == id) return _notes[i];
         return null;
+    }
+
+    void EnsureConstantSize(GameObject go)
+    {
+        if (go == null) return;
+        DistanceConstantSize comp = go.GetComponent<DistanceConstantSize>();
+        if (comp == null) comp = go.AddComponent<DistanceConstantSize>();
+        // Component self-resolves referenceCamera to Camera.main and uses its
+        // own default referenceDistance / floor / max. Tune via inspector if
+        // a specific prefab needs a different depth band.
     }
 }

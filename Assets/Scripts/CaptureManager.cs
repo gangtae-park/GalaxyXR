@@ -60,6 +60,7 @@ public class CaptureManager : MonoBehaviour
         Vector2 initialSize = ComputeInitialWorldSize(bbox, frameSize, cam);
 
         var go = Instantiate(captureControlCardPrefab, worldPos, Quaternion.identity);
+        EnsureConstantSize(go, cam);
         var card = go.GetComponent<CaptureControlCard>();
         if (card == null)
         {
@@ -115,4 +116,12 @@ public class CaptureManager : MonoBehaviour
     Vector2 ClampToMin(Vector2 v) => new Vector2(
         Mathf.Max(v.x, minInitialWorldSize.x),
         Mathf.Max(v.y, minInitialWorldSize.y));
+
+    void EnsureConstantSize(GameObject go, Camera cam)
+    {
+        if (go == null) return;
+        DistanceConstantSize comp = go.GetComponent<DistanceConstantSize>();
+        if (comp == null) comp = go.AddComponent<DistanceConstantSize>();
+        comp.referenceCamera = cam != null ? cam : Camera.main;
+    }
 }

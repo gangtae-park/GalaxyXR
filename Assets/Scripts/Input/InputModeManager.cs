@@ -22,11 +22,8 @@ public class InputModeManager : MonoBehaviour
     public bool keepGazeEnabledInVoiceOnly = false;
     public bool keepGazeEnabledInUIOnly = true;
 
-    [Header("Legacy voice recorder")]
-    public AskVoiceInputController legacyAskVoiceInputController;
-    public bool disableLegacyAskVoiceController = true;
-
     [Header("Object UI")]
+    [Tooltip("Reference is kept so SetMode can still find the manager, but auto-triggering on UI mode select is OFF by default. The left-hand pinch hold (ObjectUiHandTrigger) is the intended trigger -- it captures at the user's commit instant and minimises head-pose drift before bubble placement.")]
     public ObjectUiRequestManager objectUiRequestManager;
     public bool startObjectUiRequestOnUIOnly = false;
 
@@ -117,15 +114,6 @@ public class InputModeManager : MonoBehaviour
         SetEnabled(gazeControllers, gazeEnabled);
         NotifyVoiceManagers(currentMode);
 
-        if (disableLegacyAskVoiceController && legacyAskVoiceInputController != null)
-        {
-            legacyAskVoiceInputController.HideListeningPanel("android_stt_active");
-            legacyAskVoiceInputController.allowLegacyRecording = false;
-            legacyAskVoiceInputController.enabled = false;
-            if (verboseLogging)
-                Debug.Log("[InputModeManager] Legacy AskVoiceInputController disabled because Android STT voice input is active.");
-        }
-
         if (verboseLogging)
         {
             Debug.Log($"[InputModeManager] mode={currentMode} gesture={gestureEnabled} voice={voiceEnabled} ui={uiEnabled} gaze={gazeEnabled}");
@@ -147,8 +135,6 @@ public class InputModeManager : MonoBehaviour
     {
         Debug.Log("[InputModeManager] voice disabled -> cleanup voice listening UI");
         CleanupVoiceListeningUi(voiceControllers, reason);
-        if (legacyAskVoiceInputController != null)
-            legacyAskVoiceInputController.HideListeningPanel(reason);
     }
 
     void CleanupVoiceListeningUi(Behaviour[] controllers, string reason)

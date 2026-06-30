@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 
 public class ObjectDetectionBubbleSpawner : MonoBehaviour
 {
@@ -9,6 +8,7 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
     [SerializeField] Transform bubbleRoot;
     [SerializeField] ObjectActionRadialMenuSpawner radialMenuSpawner;
     [SerializeField] DetectedObjectAnchorResolver anchorResolver;
+    [SerializeField] CaptureContextRegistry captureContextRegistry;
     [SerializeField] Camera referenceCamera;
 
     [Header("Bubble placement")]
@@ -17,9 +17,17 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
     [SerializeField] float bubbleDistanceMeters = 1.2f;
     [SerializeField] float bubbleVerticalOffsetMeters = 0.04f;
     [SerializeField] float bubbleForwardOffsetMeters = 0.03f;
+    [Tooltip("Multiplied with Depth Anything's metric estimate before bubble placement. <1.0 pulls bubbles closer to the user (good if depth feels too far), >1.0 pushes them away. 1.0 leaves the raw estimate alone.")]
+    [SerializeField, Range(0.1f, 2.0f)] float depthScaleFactor = 1.0f;
     [SerializeField] bool clearPreviousOnShow = true;
     [SerializeField] bool autoCreateRuntimeBubblePrefab = true;
     [SerializeField] bool verboseLogging = true;
+
+    [Header("Constant-apparent-size scaling")]
+    [SerializeField] bool enforceConstantApparentSize = true;
+    [SerializeField] float constantSizeReferenceDistance = 1.2f;
+    [SerializeField] bool constantSizeFloorAtAuthored = true;
+    [SerializeField, Range(1f, 10f)] float constantSizeMaxMultiplier = 4.0f;
     
     [Header("Optional depth / raycast placement")]
     public bool usePhysicsRaycastPlacement = false;
@@ -118,6 +126,8 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
             Vector2 center = detection.Center;
             Vector3 worldPosition = ComputeBubbleWorldPosition(detection);
             ObjectDetectionBubble bubble = Instantiate(bubblePrefab, worldPosition, Quaternion.identity, parent);
+            ApplyConstantSize(bubble.gameObject);
+            EnsureXrInteractableIfAvailable(bubble.gameObject);
             bubble.gameObject.SetActive(true);
             bubble.ReferenceCamera = referenceCamera != null ? referenceCamera : Camera.main;
             bubble.Initialize(detection, payload, requestId, OnBubbleClicked);
@@ -156,88 +166,40 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
             Debug.Log("[UIInteraction] Cleared bubbles");
     }
 
+    // Runtime fallback when bubblePrefab is not assigned. Creates a small blue
+    // sphere with a SphereCollider so EventSystem / XR pointer can click it.
+    // No Canvas, no label, no confidence -- just a marker.
     ObjectDetectionBubble CreateRuntimeBubblePrefab()
     {
-        GameObject root = new GameObject("ObjectDetectionBubbleRuntimePrefab", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        GameObject root = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        root.name = "ObjectDetectionBubbleRuntimePrefab";
         root.transform.SetParent(transform, false);
+        root.transform.localScale = Vector3.one * 0.05f; // 5 cm diameter
         root.SetActive(false);
 
-        RectTransform rootRect = root.GetComponent<RectTransform>();
-        rootRect.sizeDelta = new Vector2(150f, 72f);
-        root.transform.localScale = Vector3.one * 0.0012f;
-
-        Canvas canvas = root.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.WorldSpace;
-        canvas.worldCamera = referenceCamera != null ? referenceCamera : Camera.main;
-
-        CanvasScaler scaler = root.GetComponent<CanvasScaler>();
-        scaler.dynamicPixelsPerUnit = 10f;
-
-        AddTrackedDeviceGraphicRaycasterIfAvailable(root);
-
-        GameObject buttonGo = new GameObject("BubbleButton", typeof(RectTransform), typeof(Image), typeof(Button));
-        buttonGo.transform.SetParent(root.transform, false);
-        RectTransform buttonRect = buttonGo.GetComponent<RectTransform>();
-        buttonRect.anchorMin = Vector2.zero;
-        buttonRect.anchorMax = Vector2.one;
-        buttonRect.offsetMin = Vector2.zero;
-        buttonRect.offsetMax = Vector2.zero;
-
-        Image image = buttonGo.GetComponent<Image>();
-        image.color = new Color(0.08f, 0.43f, 1f, 0.88f);
-
-        Button button = buttonGo.GetComponent<Button>();
-        ColorBlock colors = button.colors;
-        colors.normalColor = new Color(0.08f, 0.43f, 1f, 0.88f);
-        colors.highlightedColor = new Color(0.24f, 0.58f, 1f, 0.96f);
-        colors.pressedColor = new Color(0.02f, 0.24f, 0.82f, 1f);
-        colors.selectedColor = colors.highlightedColor;
-        button.colors = colors;
-
-        Text label = CreateRuntimeText(buttonGo.transform, "Label", new Vector2(0f, 10f), 20, FontStyle.Bold);
-        Text confidence = CreateRuntimeText(buttonGo.transform, "Confidence", new Vector2(0f, -16f), 14, FontStyle.Normal);
+        // CreatePrimitive already gives us MeshFilter + MeshRenderer + SphereCollider.
+        MeshRenderer mr = root.GetComponent<MeshRenderer>();
+        if (mr != null)
+        {
+            Material mat = new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color"));
+            mat.color = new Color(0.08f, 0.43f, 1f, 0.88f);
+            mr.sharedMaterial = mat;
+        }
 
         ObjectDetectionBubble bubble = root.AddComponent<ObjectDetectionBubble>();
-        bubble.Button = button;
-        bubble.LabelText = label;
-        bubble.ConfidenceText = confidence;
         bubble.ReferenceCamera = referenceCamera != null ? referenceCamera : Camera.main;
 
         if (verboseLogging)
-            Debug.Log("[OBJECT_BUBBLE] created runtime default bubble prefab.");
+            Debug.Log("[OBJECT_BUBBLE] created runtime default sphere bubble prefab.");
 
         return bubble;
-    }
-
-    static Text CreateRuntimeText(Transform parent, string name, Vector2 anchoredPosition, int fontSize, FontStyle style)
-    {
-        GameObject go = new GameObject(name, typeof(RectTransform), typeof(Text));
-        go.transform.SetParent(parent, false);
-        RectTransform rect = go.GetComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0.5f, 0.5f);
-        rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.anchoredPosition = anchoredPosition;
-        rect.sizeDelta = new Vector2(136f, 24f);
-
-        Text text = go.GetComponent<Text>();
-        text.alignment = TextAnchor.MiddleCenter;
-        text.color = Color.white;
-        text.fontSize = fontSize;
-        text.fontStyle = style;
-        text.resizeTextForBestFit = true;
-        text.resizeTextMinSize = 8;
-        text.resizeTextMaxSize = fontSize;
-        text.raycastTarget = false;
-        // Arial.ttf was retired from Unity's built-in resources; the new name is LegacyRuntime.ttf.
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        return text;
     }
 
     void OnBubbleClicked(
         DetectionResult detection,
         VlmResultReceiver.VlmResultPayload payload,
-        string requestId)
+        string requestId,
+        Vector3 bubbleWorldPosition)
     {
         if (detection == null)
         {
@@ -246,8 +208,11 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
         }
 
         Debug.Log($"[UIInteraction] Bubble clicked: {detection.label}");
-        Debug.Log($"[OBJECT_BUBBLE] clicked label={detection.label} conf={detection.confidence:F3} request_id={requestId}");
-        ClearBubbles();
+        Debug.Log($"[OBJECT_BUBBLE] clicked label={detection.label} conf={detection.confidence:F3} request_id={requestId} bubble_world=({bubbleWorldPosition.x:F3},{bubbleWorldPosition.y:F3},{bubbleWorldPosition.z:F3})");
+        // NOTE: Bubbles intentionally NOT cleared here. They stay visible
+        // through menu interaction; they're only swapped out by another long
+        // pinch (which calls ShowBubbles with clearPreviousOnShow=true) or
+        // torn down on mode change (ObjectUiRequestManager.OnDisable).
         ResolveReferences();
 
         if (radialMenuSpawner == null)
@@ -256,9 +221,21 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
             return;
         }
 
+        // Re-clicking the same bubble while its menu is open should toggle the
+        // menu off (no Cancel wedge -- toggle UX is simpler).
+        if (radialMenuSpawner.IsMenuOpenFor(detection))
+        {
+            Debug.Log($"[OBJECT_BUBBLE] re-click on bubble whose menu is open -> close menu label={detection.label}");
+            radialMenuSpawner.CloseCurrentMenu();
+            return;
+        }
+
         Debug.Log("[UIInteraction] Opening UI panel from bubble click");
-        Debug.Log("[OBJECT_BUBBLE] calling radial menu spawner...");
-        bool spawned = radialMenuSpawner.HandleDetectionResult(detection, payload, requestId);
+        Debug.Log("[OBJECT_BUBBLE] calling radial menu spawner at bubble world position...");
+        // Hand the actual bubble world position to the menu spawner so it
+        // anchors there directly (no anchor-resolver reprojection, no
+        // camera-forward pull-back).
+        bool spawned = radialMenuSpawner.HandleDetectionResult(detection, payload, requestId, bubbleWorldPosition);
         if (!spawned)
             Debug.LogWarning($"[OBJECT_BUBBLE][WARN] radial menu spawn failed label={detection.label} request_id={requestId}");
     }
@@ -266,42 +243,77 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
     Vector3 ComputeBubbleWorldPosition(DetectionResult detection)
     {
         Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
+
+        // Preferred path: head-space gaze direction (from Python inverse gaze
+        // calibration applied to the bbox centre) + metric depth (Depth Anything
+        // V2). We MUST use the capture-time camera pose -- not the current one --
+        // because the user may have moved their head between capture and spawn.
+        if (detection != null && detection.HasGazeAnchor())
+        {
+            float scaledDepth = Mathf.Max(0.05f, detection.depthMeters * depthScaleFactor);
+            if (TryGetCapturePose(detection.requestId, out Vector3 captureOrigin, out Quaternion captureRotation))
+            {
+                Vector3 headDir = detection.gazeDir.normalized;
+                Vector3 worldDir = captureRotation * headDir;
+                Vector3 worldPos = captureOrigin + worldDir * scaledDepth;
+                if (verboseLogging)
+                {
+                    Debug.Log($"[OBJECT_BUBBLE] gaze+depth anchor head=({headDir.x:F3},{headDir.y:F3},{headDir.z:F3}) depth_raw={detection.depthMeters:F2}m depth_scaled={scaledDepth:F2}m (x{depthScaleFactor:F2}) source={detection.depthSource} world=({worldPos.x:F3},{worldPos.y:F3},{worldPos.z:F3}) request_id={detection.requestId}");
+                }
+                return worldPos;
+            }
+
+            // Capture pose not registered -- last-resort: current camera (still
+            // better than viewport ray, but head drift will show).
+            if (cam != null)
+            {
+                Vector3 worldDir = cam.transform.TransformDirection(detection.gazeDir.normalized);
+                Vector3 worldPos = cam.transform.position + worldDir * scaledDepth;
+                if (verboseLogging)
+                    Debug.LogWarning($"[OBJECT_BUBBLE] gaze+depth anchor used CURRENT camera pose (no capture pose for request_id={detection.requestId}); head drift may show. depth_scaled={scaledDepth:F2}m");
+                return worldPos;
+            }
+        }
+
         if (cam == null)
         {
             Debug.LogWarning("[OBJECT_BUBBLE][WARN] No camera found. Using spawner forward fallback.");
             return transform.position + transform.forward * Mathf.Max(0.05f, bubbleDistanceMeters);
         }
 
+        // Legacy fallback: viewport ray at fixed distance. Used only when Python
+        // didn't supply gaze_dir/depth (older payloads or model unavailable).
         Vector2 viewportCenter = GetDetectionViewportCenter(detection);
-
         Ray ray = cam.ViewportPointToRay(new Vector3(viewportCenter.x, viewportCenter.y, 0f));
 
-        if (usePhysicsRaycastPlacement)
+        if (usePhysicsRaycastPlacement && TryGetRaycastWorldPosition(ray, out Vector3 raycastPosition))
         {
-            if (TryGetRaycastWorldPosition(ray, out Vector3 raycastPosition))
-            {
-                if (verboseLogging)
-                {
-                    Debug.Log($"[OBJECT_BUBBLE] raycast placement success viewport=({viewportCenter.x:F3},{viewportCenter.y:F3}) world=({raycastPosition.x:F3},{raycastPosition.y:F3},{raycastPosition.z:F3})");
-                }
-
-                return raycastPosition;
-            }
-
             if (verboseLogging)
-            {
-                Debug.Log("[OBJECT_BUBBLE] raycast placement failed. Falling back to fixed distance.");
-            }
+                Debug.Log($"[OBJECT_BUBBLE] raycast placement viewport=({viewportCenter.x:F3},{viewportCenter.y:F3}) world=({raycastPosition.x:F3},{raycastPosition.y:F3},{raycastPosition.z:F3})");
+            return raycastPosition;
         }
 
         Vector3 fixedPosition = GetFixedDistanceWorldPosition(cam, ray);
-
         if (verboseLogging)
-        {
             Debug.Log($"[OBJECT_BUBBLE] fixed placement viewport=({viewportCenter.x:F3},{viewportCenter.y:F3}) distance={bubbleDistanceMeters:F2} world=({fixedPosition.x:F3},{fixedPosition.y:F3},{fixedPosition.z:F3})");
-        }
-
         return fixedPosition;
+    }
+
+    bool TryGetCapturePose(string requestId, out Vector3 origin, out Quaternion rotation)
+    {
+        origin = Vector3.zero;
+        rotation = Quaternion.identity;
+        if (string.IsNullOrEmpty(requestId)) return false;
+        if (captureContextRegistry == null)
+            captureContextRegistry = CaptureContextRegistry.EnsureInstance();
+        if (captureContextRegistry == null) return false;
+
+        if (!captureContextRegistry.TryGet(requestId, out CaptureContextRegistry.CaptureContext context) || context == null)
+            return false;
+
+        origin = context.cameraPosition;
+        rotation = context.cameraRotation;
+        return true;
     }
 
     Vector2 GetDetectionViewportCenter(DetectionResult detection)
@@ -340,16 +352,6 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
         }
 
         return false;
-    }
-
-    void AddTrackedDeviceGraphicRaycasterIfAvailable(GameObject root)
-    {
-        System.Type raycasterType = System.Type.GetType(
-            "UnityEngine.XR.Interaction.Toolkit.UI.TrackedDeviceGraphicRaycaster, Unity.XR.Interaction.Toolkit");
-        if (raycasterType == null || root.GetComponent(raycasterType) != null) return;
-        root.AddComponent(raycasterType);
-        if (verboseLogging)
-            Debug.Log("[OBJECT_BUBBLE] XR tracked device graphic raycaster attached to bubble.");
     }
 
     Vector3 GetFixedDistanceWorldPosition(Camera cam, Ray ray)
@@ -395,5 +397,41 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
         if (anchorResolver == null && radialMenuSpawner != null)
             anchorResolver = radialMenuSpawner.anchorResolver;
         if (anchorResolver == null) anchorResolver = FindObjectOfType<DetectedObjectAnchorResolver>();
+        if (captureContextRegistry == null) captureContextRegistry = CaptureContextRegistry.EnsureInstance();
+    }
+
+    void ApplyConstantSize(GameObject go)
+    {
+        if (!enforceConstantApparentSize || go == null) return;
+        DistanceConstantSize comp = go.GetComponent<DistanceConstantSize>();
+        if (comp == null) comp = go.AddComponent<DistanceConstantSize>();
+        comp.referenceCamera = referenceCamera != null ? referenceCamera : Camera.main;
+        comp.referenceDistanceMeters = constantSizeReferenceDistance;
+        comp.floorAtAuthoredSize = constantSizeFloorAtAuthored;
+        comp.maxScaleMultiplier = constantSizeMaxMultiplier;
+    }
+
+    // Safety net: if XR Interaction Toolkit is installed and the prefab lacks
+    // an XRSimpleInteractable, add one at runtime so XR Ray Interactor pinch
+    // can select the sphere. ObjectDetectionBubble.Initialize then hooks
+    // selectEntered. No-op if XRI isn't present.
+    static System.Type s_xrSimpleInteractableType;
+    static bool s_xrTypeProbed;
+    void EnsureXrInteractableIfAvailable(GameObject go)
+    {
+        if (go == null) return;
+        if (!s_xrTypeProbed)
+        {
+            s_xrTypeProbed = true;
+            s_xrSimpleInteractableType = System.Type.GetType(
+                "UnityEngine.XR.Interaction.Toolkit.Interactables.XRSimpleInteractable, Unity.XR.Interaction.Toolkit")
+                ?? System.Type.GetType(
+                    "UnityEngine.XR.Interaction.Toolkit.XRSimpleInteractable, Unity.XR.Interaction.Toolkit");
+        }
+        if (s_xrSimpleInteractableType == null) return;
+        if (go.GetComponent(s_xrSimpleInteractableType) != null) return;
+        go.AddComponent(s_xrSimpleInteractableType);
+        if (verboseLogging)
+            Debug.Log("[OBJECT_BUBBLE] auto-added XRSimpleInteractable so pinch can select the bubble.");
     }
 }

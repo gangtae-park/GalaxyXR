@@ -31,6 +31,16 @@ public class VlmResultReceiver : MonoBehaviour
         public string raw;
         public string finish_reason;
         public string refusal;
+        // Anchor info for distance-aware card placement. gaze_dir is the
+        // head-space unit vector to the target (from Python inverse calibration
+        // applied to the YOLO bbox centre); depth_meters comes from Depth
+        // Anything V2. Zero values mean Python didn't supply anchor data and
+        // the spawner should fall back to the legacy fixed-distance placement.
+        public float gaze_dir_x;
+        public float gaze_dir_y;
+        public float gaze_dir_z;
+        public float depth_meters;
+        public string depth_source;  // "mask" | "bbox" | "none"
     }
 
     [Serializable]
@@ -57,8 +67,9 @@ public class VlmResultReceiver : MonoBehaviour
     {
         public string request_id;
         public string requestId;
-        public string label;
+        public string label;          // human-readable name (DB name after CLIP filter)
         public string class_name;
+        public string object_id;      // DB key from CLIP match, e.g. "object_a"
         public float confidence;
         public float conf;
         public float[] bbox;
@@ -66,6 +77,15 @@ public class VlmResultReceiver : MonoBehaviour
         public int image_height;
         public int imageWidth;
         public int imageHeight;
+        // Bubble world-space anchoring: gaze direction (head-space unit vector)
+        // computed via inverse gaze calibration applied to the bbox centre, and
+        // metric depth from Depth Anything V2. Together they let Unity place the
+        // bubble at camera + R_capture * gaze_dir * depth, no raycast required.
+        public float gaze_dir_x;
+        public float gaze_dir_y;
+        public float gaze_dir_z;
+        public float depth_meters;
+        public string depth_source;  // "mask" | "bbox" | "none"
     }
 
     [Serializable]

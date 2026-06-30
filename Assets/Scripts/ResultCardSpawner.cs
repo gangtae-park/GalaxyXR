@@ -60,41 +60,62 @@ public class ResultCardSpawner : MonoBehaviour
     [Tooltip("Maximum simultaneous anchor pins. 0 = unlimited. When exceeded the oldest is destroyed (FIFO).")]
     public int maxAnchors = 0;
 
-    [Header("Reference AR style")]
-    public bool applyReferencePanelStyle = true;
-    public Color panelBackgroundColor = new Color(0.20f, 0.45f, 1.0f, 0.55f);
-    public Color panelBorderColor = new Color(0.72f, 0.88f, 1.0f, 0.78f);
-    public Color panelTextColor = Color.white;
-    public Color panelSecondaryTextColor = new Color(0.92f, 0.97f, 1.0f, 0.92f);
-    public Vector2 infoPanelSize = new Vector2(380f, 160f);
-    public Vector2 askPanelSize = new Vector2(430f, 150f);
-    public Vector2 answerPanelSize = new Vector2(500f, 240f);
-    public Vector2 comparePanelSize = new Vector2(440f, 190f);
-    public Vector2 translationPanelSize = new Vector2(380f, 150f);
-    public Vector2 statusPanelSize = new Vector2(320f, 95f);
-    public Vector2 sensorPanelSize = new Vector2(350f, 190f);
-    public bool showTargetBoundingBox = true;
-    public Vector2 targetBoundingBoxSize = new Vector2(0.45f, 0.35f);
-    public Color targetBoundingBoxColor = new Color(0.45f, 0.70f, 1.0f, 0.9f);
-    public float targetBoundingBoxLineWidth = 0.006f;
-
-    [Header("Spawn position (relative to gaze)")]
-    [Tooltip("Distance from the camera along the gaze direction where the card 'anchor' lands.")]
+    [Header("Spawn position (legacy fallback)")]
+    [Tooltip("Fallback object distance (metres) when Python doesn't provide depth_meters. Used to compute the object world position from the gaze ray.")]
     public float gazeProjectionDistance = 1.2f;
-    [Tooltip("Offset to the right (in meters, relative to camera-right at spawn time).")]
-    public float horizontalOffset = 0.25f;
-    [Tooltip("Offset upward (in meters, relative to camera-up at spawn time).")]
-    public float verticalOffset = 0.15f;
+    [Tooltip("Multiplied with Depth Anything's metric depth_meters before card placement. <1.0 brings cards closer to the user.")]
+    [Range(0.1f, 2f)] public float objectDepthScale = 1.0f;
+
+    [Header("Group A placement (Search / Ask / AskResult / VoiceResult / Note)")]
+    [Tooltip("Horizontal offset (m) along capture-time camera-right. Positive = right of the object.")]
+    public float groupAHorizontalOffset = 0.12f;
+    [Tooltip("Vertical offset (m) along capture-time camera-up. Positive = above the object.")]
+    public float groupAVerticalOffset = 0.08f;
+    [Tooltip("Distance (m) the card is pulled back along the gaze direction toward the user, so it doesn't sit ON the object.")]
+    public float groupAPullTowardUser = 0.15f;
+
+    [Header("Group B placement (Translate / Capture)")]
+    [Tooltip("Tiny pull toward the user so the card never z-fights with the actual surface. Usually 0.")]
+    public float groupBPullTowardUser = 0.0f;
+
+    [Header("Anchor placement (above-object variant of group B)")]
+    [Tooltip("Vertical lift (m) applied to the Anchor pin so it floats just above the object. Bigger value -> further above; matches typical bubble radius of ~2.5 cm.")]
+    public float anchorAboveOffset = 0.12f;
+
+    [Header("Constant-apparent-size scaling")]
+    [Tooltip("When true, every spawned card gets a DistanceConstantSize component so it stays roughly the same screen size at any depth.")]
+    public bool enforceConstantApparentSize = true;
+    [Tooltip("Distance (m) at which the prefab's authored scale is considered correct. Cards at exactly this depth keep their authored size.")]
+    public float constantSizeReferenceDistance = 1.2f;
+    [Tooltip("If true, cards closer to the user than the reference distance keep their authored size rather than shrinking.")]
+    public bool constantSizeFloorAtAuthored = true;
+    [Range(1f, 10f)]
+    public float constantSizeMaxMultiplier = 4.0f;
 
     [Header("Behavior")]
     public bool replacePreviousCard = true;
     public bool verboseLogging = true;
 
+    // Used by ComputeCardSpawnPosition to know which offset profile to apply.
+    enum CardPlacementPolicy
+    {
+        OffsetUpperRightCloser,   // Group A: cards live up/right of the object, slightly closer to user
+        AtObject,                 // Group B: cards sit on the object (Translate / Capture)
+        AtObjectAbove,            // Anchor: same as AtObject but lifted upward a bit
+    }
+
+    struct GazeSnapshot
+    {
+        public Vector3 cameraPos;
+        public Quaternion cameraRot;
+        public Vector3 gazeDirWorld;   // unit, world space, at capture time
+        public bool isValid;
+    }
+
     private GameObject _currentCard;
-    private ARBoundingBoxVisual _currentTargetBounds;
     private AskQuestionCard _pendingAskQuestion;
-    private Vector3 _lastGazeWorldPos;
-    private bool _haveGazeSnapshot;
+    private Vector3? _overrideNextSpawnPosition;
+    private GazeSnapshot _lastGazeSnapshot;
     private readonly Queue<GameObject> _spawnedAnchors = new Queue<GameObject>();
 
     /// <summary>The AskQuestionCard currently waiting for the user's voice question,
@@ -124,16 +145,12 @@ public class ResultCardSpawner : MonoBehaviour
 
     public void CaptureCurrentGazeSnapshot(string reason)
     {
-        _lastGazeWorldPos = ComputeGazeWorldPosition();
-        _haveGazeSnapshot = true;
-        if (verboseLogging)
-            Debug.Log($"[ResultCardSpawner] {reason} -> gaze snapshot {_lastGazeWorldPos}");
-    }
-
-    Vector3 ComputeGazeWorldPosition()
-    {
         Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
-        if (cam == null) return transform.position;
+        if (cam == null)
+        {
+            _lastGazeSnapshot = new GazeSnapshot { isValid = false };
+            return;
+        }
 
         Vector3 gazeDir = cam.transform.forward;
         if (eyeGazeReader != null && eyeGazeReader.LatestIsTracked
@@ -141,19 +158,124 @@ public class ResultCardSpawner : MonoBehaviour
         {
             gazeDir = eyeGazeReader.LatestGazeDirection.normalized;
         }
-        return cam.transform.position + gazeDir * gazeProjectionDistance;
+
+        _lastGazeSnapshot = new GazeSnapshot
+        {
+            cameraPos = cam.transform.position,
+            cameraRot = cam.transform.rotation,
+            gazeDirWorld = gazeDir,
+            isValid = true,
+        };
+
+        if (verboseLogging)
+            Debug.Log($"[ResultCardSpawner] {reason} -> gaze snapshot cam={_lastGazeSnapshot.cameraPos} dir={_lastGazeSnapshot.gazeDirWorld}");
     }
 
-    Vector3 ComputeSpawnPosition()
+    /// <summary>Consumed once by the next ComputeObjectWorldPosition call so the
+    /// upcoming card spawns exactly at the supplied world position (used by the
+    /// bubble-menu flow: cards should land at the clicked bubble, not where the
+    /// payload's gaze_dir + depth happen to project to).
+    ///
+    /// Also synthesises a GazeSnapshot from the current camera so the per-policy
+    /// offset (group A right/up/toward-user, Anchor above) still has well-defined
+    /// directions. Without this, the spawn collapses to the raw override point
+    /// and follow-ups like sticky notes / anchor pins visually overlap the bubble.</summary>
+    public void OverrideNextSpawnPosition(Vector3 worldPos)
     {
+        _overrideNextSpawnPosition = worldPos;
+
         Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
-        Vector3 basePos = _haveGazeSnapshot ? _lastGazeWorldPos
-                        : (cam != null ? cam.transform.position + cam.transform.forward * gazeProjectionDistance
-                                       : transform.position);
-        if (cam == null) return basePos;
-        return basePos
-            + cam.transform.right * horizontalOffset
-            + cam.transform.up    * verticalOffset;
+        if (cam != null)
+        {
+            Vector3 toObject = worldPos - cam.transform.position;
+            Vector3 gazeDir = toObject.sqrMagnitude > 0.0001f ? toObject.normalized : cam.transform.forward;
+            _lastGazeSnapshot = new GazeSnapshot
+            {
+                cameraPos = cam.transform.position,
+                cameraRot = cam.transform.rotation,
+                gazeDirWorld = gazeDir,
+                isValid = true,
+            };
+        }
+
+        if (verboseLogging)
+            Debug.Log($"[ResultCardSpawner] next spawn override = ({worldPos.x:F3},{worldPos.y:F3},{worldPos.z:F3}) (synthetic snapshot from current camera)");
+    }
+
+    /// <summary>Compute the object's world position from the gesture-time snapshot and (if available)
+    /// the Python-supplied head-space gaze direction + metric depth. Falls back to the legacy
+    /// fixed-distance gaze ray when those payload fields are zero.</summary>
+    Vector3 ComputeObjectWorldPosition(VlmResultReceiver.VlmResultPayload payload)
+    {
+        if (_overrideNextSpawnPosition.HasValue)
+        {
+            Vector3 pos = _overrideNextSpawnPosition.Value;
+            _overrideNextSpawnPosition = null;
+            if (verboseLogging)
+                Debug.Log($"[ResultCardSpawner] using one-shot override position {pos}");
+            return pos;
+        }
+
+        Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
+        if (!_lastGazeSnapshot.isValid)
+        {
+            if (cam != null)
+                return cam.transform.position + cam.transform.forward * gazeProjectionDistance;
+            return transform.position;
+        }
+
+        bool hasPayloadAnchor =
+            payload != null
+            && payload.response != null
+            && payload.response.depth_meters > 0.01f;
+
+        if (hasPayloadAnchor)
+        {
+            Vector3 headDir = new Vector3(
+                payload.response.gaze_dir_x,
+                payload.response.gaze_dir_y,
+                payload.response.gaze_dir_z);
+            // Python supplies a unit-length vector when calibration is loaded; if it's
+            // zero (no calibration), fall back to the snapshot's world gaze.
+            if (headDir.sqrMagnitude < 0.0001f)
+            {
+                Vector3 worldDir = _lastGazeSnapshot.gazeDirWorld.normalized;
+                return _lastGazeSnapshot.cameraPos + worldDir * Mathf.Max(0.05f, payload.response.depth_meters * objectDepthScale);
+            }
+            Vector3 dirWorld = _lastGazeSnapshot.cameraRot * headDir.normalized;
+            return _lastGazeSnapshot.cameraPos + dirWorld * Mathf.Max(0.05f, payload.response.depth_meters * objectDepthScale);
+        }
+
+        // No depth from Python -> legacy fixed-distance fallback.
+        return _lastGazeSnapshot.cameraPos + _lastGazeSnapshot.gazeDirWorld.normalized * gazeProjectionDistance;
+    }
+
+    /// <summary>Apply a prefab-specific placement policy on top of the raw object world position.</summary>
+    Vector3 ComputeCardSpawnPosition(VlmResultReceiver.VlmResultPayload payload, CardPlacementPolicy policy)
+    {
+        Vector3 objectPos = ComputeObjectWorldPosition(payload);
+        if (!_lastGazeSnapshot.isValid)
+            return objectPos;
+
+        // Capture-time right/up so the offset is "frozen" at the user's head pose
+        // at gesture END, rather than tracking the user as they move.
+        Vector3 rightDir = _lastGazeSnapshot.cameraRot * Vector3.right;
+        Vector3 upDir = _lastGazeSnapshot.cameraRot * Vector3.up;
+        Vector3 towardUser = -_lastGazeSnapshot.gazeDirWorld.normalized;
+
+        switch (policy)
+        {
+            case CardPlacementPolicy.OffsetUpperRightCloser:
+                return objectPos
+                    + rightDir * groupAHorizontalOffset
+                    + upDir * groupAVerticalOffset
+                    + towardUser * groupAPullTowardUser;
+            case CardPlacementPolicy.AtObjectAbove:
+                return objectPos + Vector3.up * anchorAboveOffset + towardUser * groupBPullTowardUser;
+            case CardPlacementPolicy.AtObject:
+            default:
+                return objectPos + towardUser * groupBPullTowardUser;
+        }
     }
 
     // ---------- result dispatch ----------
@@ -271,7 +393,7 @@ public class ResultCardSpawner : MonoBehaviour
             return;
         }
 
-        Vector3 pos = ComputeSpawnPosition();
+        Vector3 pos = ComputeCardSpawnPosition(payload, CardPlacementPolicy.OffsetUpperRightCloser);
         Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
         Quaternion rot = (cam != null)
             ? Quaternion.LookRotation(cam.transform.forward, Vector3.up)
@@ -307,9 +429,8 @@ public class ResultCardSpawner : MonoBehaviour
             return;
         }
 
-        // Centre on the object itself -- skip the right/up offsets that the
-        // other cards use (they'd push the rectangle off the object).
-        Vector3 pos = _haveGazeSnapshot ? _lastGazeWorldPos : ComputeGazeWorldPosition();
+        // Capture centres on the object itself (AtObject policy).
+        Vector3 pos = ComputeCardSpawnPosition(payload, CardPlacementPolicy.AtObject);
         int[] bbox = payload.target_meta != null ? payload.target_meta.bbox : null;
         int[] frameSize = payload.target_meta != null ? payload.target_meta.frame_size : null;
 
@@ -353,13 +474,14 @@ public class ResultCardSpawner : MonoBehaviour
             return;
         }
 
-        Vector3 pos = ComputeSpawnPosition();
+        Vector3 pos = ComputeCardSpawnPosition(payload, CardPlacementPolicy.AtObjectAbove);
         Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
         Quaternion rot = (cam != null)
             ? Quaternion.LookRotation(cam.transform.forward, Vector3.up)
             : Quaternion.identity;
 
         GameObject go = Instantiate(anchorPinPrefab, pos, rot);
+        ApplyConstantSize(go);
         var pin = go.GetComponent<AnchorPin>();
         if (pin != null && payload.response != null)
             pin.SetContent(payload.response.name);
@@ -412,7 +534,8 @@ public class ResultCardSpawner : MonoBehaviour
         if (card == null)
         {
             ReplaceCurrentCard();
-            GameObject go = Instantiate(translateResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
+            GameObject go = Instantiate(translateResultCardPrefab, ComputeCardSpawnPosition(payload, CardPlacementPolicy.AtObject), Quaternion.identity);
+            ApplyConstantSize(go);
             _currentCard = go;
             card = go.GetComponent<TranslateResultCard>();
         }
@@ -446,13 +569,12 @@ public class ResultCardSpawner : MonoBehaviour
         }
         ReplaceCurrentCard();
 
-        GameObject go = Instantiate(searchResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
-        ApplyPanelLayout(go, ARPanelLayoutKind.InfoCard);
+        GameObject go = Instantiate(searchResultCardPrefab, ComputeCardSpawnPosition(payload, CardPlacementPolicy.OffsetUpperRightCloser), Quaternion.identity);
+        ApplyConstantSize(go);
         var card = go.GetComponent<SearchResultCard>();
         if (card != null)
             card.SetContent(payload.response.name, payload.response.result_search);
         _currentCard = go;
-        ShowTargetBoundsIfAvailable(payload);
         if (verboseLogging)
             Debug.Log($"[ResultCardSpawner] spawned SearchResultCard name='{payload.response.name}'");
     }
@@ -492,8 +614,8 @@ public class ResultCardSpawner : MonoBehaviour
 
         if (askResultCardPrefab != null)
         {
-            GameObject go = Instantiate(askResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
-            ApplyPanelLayout(go, ARPanelLayoutKind.AnswerCard);
+            GameObject go = Instantiate(askResultCardPrefab, ComputeCardSpawnPosition(payload, CardPlacementPolicy.OffsetUpperRightCloser), Quaternion.identity);
+            ApplyConstantSize(go);
             var card = go.GetComponent<AskResultCard>();
             if (card != null) card.SetContent(title, transcript, answer);
             _currentCard = go;
@@ -503,8 +625,8 @@ public class ResultCardSpawner : MonoBehaviour
 
         if (searchResultCardPrefab != null)
         {
-            GameObject go = Instantiate(searchResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
-            ApplyPanelLayout(go, ARPanelLayoutKind.InfoCard);
+            GameObject go = Instantiate(searchResultCardPrefab, ComputeCardSpawnPosition(payload, CardPlacementPolicy.OffsetUpperRightCloser), Quaternion.identity);
+            ApplyConstantSize(go);
             var card = go.GetComponent<SearchResultCard>();
             if (card != null) card.SetContent(title, answer);
             _currentCard = go;
@@ -543,8 +665,8 @@ public class ResultCardSpawner : MonoBehaviour
         }
         ReplaceCurrentCard();
 
-        GameObject go = Instantiate(askQuestionCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
-        ApplyPanelLayout(go, ARPanelLayoutKind.AskCard);
+        GameObject go = Instantiate(askQuestionCardPrefab, ComputeCardSpawnPosition(payload, CardPlacementPolicy.OffsetUpperRightCloser), Quaternion.identity);
+        ApplyConstantSize(go);
         var card = go.GetComponent<AskQuestionCard>();
         if (card != null)
         {
@@ -553,7 +675,6 @@ public class ResultCardSpawner : MonoBehaviour
             _pendingAskQuestion = card;
         }
         _currentCard = go;
-        ShowTargetBoundsIfAvailable(payload);
         if (verboseLogging)
             Debug.Log($"[ResultCardSpawner] spawned AskQuestionCard name='{payload.response.name}'");
     }
@@ -589,8 +710,8 @@ public class ResultCardSpawner : MonoBehaviour
         ReplaceCurrentCard();
         _pendingAskQuestion = null;
 
-        GameObject go = Instantiate(askResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
-        ApplyPanelLayout(go, ARPanelLayoutKind.AnswerCard);
+        GameObject go = Instantiate(askResultCardPrefab, ComputeCardSpawnPosition(payload, CardPlacementPolicy.OffsetUpperRightCloser), Quaternion.identity);
+        ApplyConstantSize(go);
         var card = go.GetComponent<AskResultCard>();
         if (card != null)
             card.SetContent(DisplayNameForAskResult(payload), question, payload.response.answer);
@@ -610,15 +731,12 @@ public class ResultCardSpawner : MonoBehaviour
         }
         ReplaceCurrentCard();
 
-        GameObject go = Instantiate(searchResultCardPrefab, ComputeSpawnPosition(), Quaternion.identity);
-        ApplyPanelLayout(go, layoutKind);
+        GameObject go = Instantiate(searchResultCardPrefab, ComputeCardSpawnPosition(payload, CardPlacementPolicy.OffsetUpperRightCloser), Quaternion.identity);
+        ApplyConstantSize(go);
         var card = go.GetComponent<SearchResultCard>();
         if (card != null)
             card.SetContent(BuildGenericTitle(payload, layoutKind), BuildGenericBody(payload, layoutKind));
         _currentCard = go;
-
-        if (layoutKind == ARPanelLayoutKind.CompareCard || layoutKind == ARPanelLayoutKind.SensorCard)
-            ShowTargetBoundsIfAvailable(payload);
 
         if (verboseLogging)
             Debug.Log($"[ResultCardSpawner] spawned generic {layoutKind} for gesture='{payload.gesture}'");
@@ -835,60 +953,19 @@ public class ResultCardSpawner : MonoBehaviour
             Destroy(_currentCard);
             _currentCard = null;
         }
-        if (_currentTargetBounds != null)
-        {
-            Destroy(_currentTargetBounds.gameObject);
-            _currentTargetBounds = null;
-        }
     }
 
-    void ApplyPanelLayout(GameObject go, ARPanelLayoutKind layoutKind)
+    /// <summary>Attach a DistanceConstantSize so the card keeps the same apparent
+    /// screen size at any depth. Skipped when the spawner-level toggle is off
+    /// or the prefab already includes its own size policy.</summary>
+    void ApplyConstantSize(GameObject go)
     {
-        if (!applyReferencePanelStyle || go == null) return;
-        ARPanelStyle style = ARPanelStyle.ApplyTo(go, layoutKind);
-        if (style == null) return;
-
-        style.backgroundColor = panelBackgroundColor;
-        style.borderColor = panelBorderColor;
-        style.textColor = panelTextColor;
-        style.secondaryTextColor = panelSecondaryTextColor;
-        style.infoSize = infoPanelSize;
-        style.askSize = askPanelSize;
-        style.answerSize = answerPanelSize;
-        style.compareSize = comparePanelSize;
-        style.translationSize = translationPanelSize;
-        style.statusSize = statusPanelSize;
-        style.sensorSize = sensorPanelSize;
-        style.Apply();
-    }
-
-    void ShowTargetBoundsIfAvailable(VlmResultReceiver.VlmResultPayload payload)
-    {
-        if (!showTargetBoundingBox || payload == null || !HasTargetBounds(payload.target_meta)) return;
-
-        if (_currentTargetBounds != null)
-            Destroy(_currentTargetBounds.gameObject);
-
-        Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
-        Vector3 center = _haveGazeSnapshot ? _lastGazeWorldPos : ComputeGazeWorldPosition();
-        _currentTargetBounds = ARBoundingBoxVisual.Create(
-            center,
-            cam,
-            targetBoundingBoxSize,
-            targetBoundingBoxColor,
-            targetBoundingBoxLineWidth,
-            30f
-        );
-    }
-
-    static bool HasTargetBounds(VlmResultReceiver.VlmTargetMeta meta)
-    {
-        if (meta == null) return false;
-        return HasBox(meta.bbox) || HasBox(meta.crop_bbox) || HasBox(meta.gaze_bbox);
-    }
-
-    static bool HasBox(float[] box)
-    {
-        return box != null && box.Length >= 4;
+        if (!enforceConstantApparentSize || go == null) return;
+        DistanceConstantSize comp = go.GetComponent<DistanceConstantSize>();
+        if (comp == null) comp = go.AddComponent<DistanceConstantSize>();
+        comp.referenceCamera = referenceCamera != null ? referenceCamera : Camera.main;
+        comp.referenceDistanceMeters = constantSizeReferenceDistance;
+        comp.floorAtAuthoredSize = constantSizeFloorAtAuthored;
+        comp.maxScaleMultiplier = constantSizeMaxMultiplier;
     }
 }

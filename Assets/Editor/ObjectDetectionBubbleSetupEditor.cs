@@ -5,7 +5,6 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 public static class ObjectDetectionBubbleSetupEditor
 {
@@ -105,6 +104,10 @@ public static class ObjectDetectionBubbleSetupEditor
         return cameras.Length > 0 ? cameras[0] : null;
     }
 
+    // Generates a sphere-based bubble prefab that matches ObjectDetectionBubble's
+    // current shape (no Canvas / Button / Text). Click handling rides on
+    // SphereCollider + EventSystem (IPointerClickHandler) and, when XR
+    // Interaction Toolkit is present, an optional XRSimpleInteractable.
     static ObjectDetectionBubble LoadOrCreateBubblePrefab()
     {
         ObjectDetectionBubble existing = AssetDatabase.LoadAssetAtPath<ObjectDetectionBubble>(PrefabPath);
@@ -112,45 +115,23 @@ public static class ObjectDetectionBubbleSetupEditor
 
         Directory.CreateDirectory(Path.GetDirectoryName(PrefabPath));
 
-        GameObject root = new GameObject("ObjectDetectionBubblePrefab", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-        RectTransform rootRect = root.GetComponent<RectTransform>();
-        rootRect.sizeDelta = new Vector2(150f, 72f);
-        root.transform.localScale = Vector3.one * 0.0012f;
+        GameObject root = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        root.name = "ObjectDetectionBubblePrefab";
+        root.transform.localScale = Vector3.one * 0.05f; // 5 cm diameter
 
-        Canvas canvas = root.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.WorldSpace;
-        canvas.pixelPerfect = false;
+        MeshRenderer mr = root.GetComponent<MeshRenderer>();
+        if (mr != null)
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null) shader = Shader.Find("Unlit/Color");
+            if (shader == null) shader = Shader.Find("Standard");
+            Material mat = new Material(shader);
+            mat.color = new Color(0.08f, 0.43f, 1f, 0.88f);
+            mr.sharedMaterial = mat;
+        }
 
-        CanvasScaler scaler = root.GetComponent<CanvasScaler>();
-        scaler.dynamicPixelsPerUnit = 10f;
-
-        AddTrackedDeviceGraphicRaycasterIfAvailable(root);
-
-        GameObject buttonGo = new GameObject("BubbleButton", typeof(RectTransform), typeof(Image), typeof(Button));
-        buttonGo.transform.SetParent(root.transform, false);
-        RectTransform buttonRect = buttonGo.GetComponent<RectTransform>();
-        buttonRect.anchorMin = Vector2.zero;
-        buttonRect.anchorMax = Vector2.one;
-        buttonRect.offsetMin = Vector2.zero;
-        buttonRect.offsetMax = Vector2.zero;
-
-        Image image = buttonGo.GetComponent<Image>();
-        image.color = new Color(0.08f, 0.43f, 1f, 0.88f);
-
-        Button button = buttonGo.GetComponent<Button>();
-        ColorBlock colors = button.colors;
-        colors.normalColor = new Color(0.08f, 0.43f, 1f, 0.88f);
-        colors.highlightedColor = new Color(0.24f, 0.58f, 1f, 0.96f);
-        colors.pressedColor = new Color(0.02f, 0.24f, 0.82f, 1f);
-        button.colors = colors;
-
-        Text label = CreateText(buttonGo.transform, "Label", new Vector2(0f, 10f), 20, FontStyle.Bold);
-        Text confidence = CreateText(buttonGo.transform, "Confidence", new Vector2(0f, -16f), 14, FontStyle.Normal);
-
-        ObjectDetectionBubble bubble = root.AddComponent<ObjectDetectionBubble>();
-        bubble.Button = button;
-        bubble.LabelText = label;
-        bubble.ConfidenceText = confidence;
+        root.AddComponent<ObjectDetectionBubble>();
+        AddXrSimpleInteractableIfAvailable(root);
 
         GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
         UnityEngine.Object.DestroyImmediate(root);
@@ -158,37 +139,15 @@ public static class ObjectDetectionBubbleSetupEditor
         return prefab != null ? prefab.GetComponent<ObjectDetectionBubble>() : AssetDatabase.LoadAssetAtPath<ObjectDetectionBubble>(PrefabPath);
     }
 
-    static Text CreateText(Transform parent, string name, Vector2 anchoredPosition, int fontSize, FontStyle style)
+    // Reflection-based add so the editor utility compiles even when XR
+    // Interaction Toolkit isn't in the project. When present, the bubble
+    // script auto-hooks selectEntered at runtime.
+    static void AddXrSimpleInteractableIfAvailable(GameObject root)
     {
-        GameObject go = new GameObject(name, typeof(RectTransform), typeof(Text));
-        go.transform.SetParent(parent, false);
-        RectTransform rect = go.GetComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0.5f, 0.5f);
-        rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.anchoredPosition = anchoredPosition;
-        rect.sizeDelta = new Vector2(136f, 24f);
-
-        Text text = go.GetComponent<Text>();
-        text.alignment = TextAnchor.MiddleCenter;
-        text.color = Color.white;
-        text.fontSize = fontSize;
-        text.fontStyle = style;
-        text.resizeTextForBestFit = true;
-        text.resizeTextMinSize = 8;
-        text.resizeTextMaxSize = fontSize;
-        text.raycastTarget = false;
-        // Arial.ttf was retired from Unity's built-in resources; the new name is LegacyRuntime.ttf.
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        return text;
-    }
-
-    static void AddTrackedDeviceGraphicRaycasterIfAvailable(GameObject root)
-    {
-        Type raycasterType = Type.GetType(
-            "UnityEngine.XR.Interaction.Toolkit.UI.TrackedDeviceGraphicRaycaster, Unity.XR.Interaction.Toolkit");
-        if (raycasterType == null || root.GetComponent(raycasterType) != null) return;
-        root.AddComponent(raycasterType);
+        Type t = Type.GetType(
+            "UnityEngine.XR.Interaction.Toolkit.Interactables.XRSimpleInteractable, Unity.XR.Interaction.Toolkit");
+        if (t == null || root.GetComponent(t) != null) return;
+        root.AddComponent(t);
     }
 
     static void EnsureEventSystem()

@@ -157,6 +157,38 @@ public class MsgSender : MonoBehaviour
         SendTextPacket("VOICE_COMMAND", transcript, "VOICE_COMMAND");
     }
 
+    /// <summary>Bubble-menu action triggered against a specific object_id (or
+    /// two ids for Compare). Python's object_action handler short-circuits
+    /// detection and uses the DB record directly. requestId is the original
+    /// /object_ui request id so Python can correlate cached anchors.</summary>
+    public void SendObjectAction(string actionName, string objectId, string secondObjectId, string requestId)
+    {
+        string safeAction = SanitizeField(actionName, "UnknownAction");
+        string safeObject = SanitizeField(objectId, "");
+        string safeSecond = SanitizeField(secondObjectId, "");
+        string safeRequest = SanitizeField(requestId, "");
+
+        string msg = string.Join(",",
+            "OBJECT_ACTION",
+            seq.ToString(CultureInfo.InvariantCulture),
+            Time.unscaledTime.ToString("F4", CultureInfo.InvariantCulture),
+            safeAction,
+            safeObject,
+            safeSecond,
+            safeRequest
+        );
+
+        Debug.Log($"[Study Log][SENDER] Sending OBJECT_ACTION: {msg}");
+        seq++;
+        SendPacket(msg);
+    }
+
+    static string SanitizeField(string value, string fallback)
+    {
+        if (string.IsNullOrEmpty(value)) return fallback;
+        return value.Replace(",", "_").Replace("\r", " ").Replace("\n", " ");
+    }
+
     public string RegisterCaptureContextForRequest(string requestId, string reason)
     {
         return RegisterCaptureContextForRequest(requestId, reason, captureImageWidth, captureImageHeight, Camera.main);

@@ -31,6 +31,8 @@ public class GestureRouter : MonoBehaviour
     public HandFeatureSource featureSource;
     public JackknifeUnifiedRecognizer recognizer;
     public MsgSender msgSender;
+    [Tooltip("Optional. When assigned, the router will skip gesture recognition while CurrentMode is not GestureOnly. Auto-resolved at runtime if left empty.")]
+    public InputModeManager inputModeManager;
 
     [Header("Capture")]
     public float captureSeconds = 2.5f;
@@ -124,10 +126,17 @@ public class GestureRouter : MonoBehaviour
 
     void OnEnable()
     {
+        if (inputModeManager == null) inputModeManager = FindObjectOfType<InputModeManager>();
         pinchAction?.action.Enable();
         leftPinchAction?.action.Enable();
         rightPinchPositionAction?.action.Enable();
         leftPinchPositionAction?.action.Enable();
+    }
+
+    bool IsGestureModeActive()
+    {
+        if (inputModeManager == null) return true;
+        return inputModeManager.CurrentMode == InputMode.GestureOnly;
     }
 
     void OnDisable()
@@ -140,6 +149,8 @@ public class GestureRouter : MonoBehaviour
 
     void Update()
     {
+        if (!IsGestureModeActive()) return;
+
         EvaluatePoseRecognition();
         UpdateRightHandSwipe();
 

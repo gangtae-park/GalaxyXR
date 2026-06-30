@@ -49,7 +49,8 @@ public class ObjectUiRequestManager : MonoBehaviour
 
     [Header("Object UI request")]
     public string objectUiServerUrl = "http://192.168.0.3:5007/object_ui";
-    public float captureDelaySeconds = 3.0f;
+    [Tooltip("Used to be the 3 s delay between dropdown selection and capture. Now the trigger is the left-hand pinch hold (ObjectUiHandTrigger), so we capture immediately. Kept as a knob in case manual debug delay is wanted.")]
+    public float captureDelaySeconds = 0.0f;
     [Range(1, 100)] public int jpegQuality = 65;
     public bool autoResolveReferences = true;
     public bool verboseLogging = true;
@@ -112,15 +113,27 @@ public class ObjectUiRequestManager : MonoBehaviour
     void OnDisable()
     {
         if (resultReceiver != null) resultReceiver.OnResult -= HandleYoloResult;
-        if (_requestRoutine != null || !string.IsNullOrEmpty(activeRequestId))
-            CancelObjectUiRequest();
+        // Mode change (UI -> Voice / Gesture) flips this component off. Tear
+        // down EVERYTHING the UI mode put on screen so the next mode doesn't
+        // see leftover bubbles, an open radial menu, or a half-finished
+        // Compare two-step in the command bridge.
+        CancelObjectUiRequest();
+        if (radialMenuSpawner != null)
+        {
+            radialMenuSpawner.CloseCurrentMenu();
+            if (radialMenuSpawner.commandBridge != null)
+                radialMenuSpawner.commandBridge.ResetPendingState("mode_change");
+        }
     }
 
     [ContextMenu("Begin Object UI Request")]
     public void BeginObjectUiRequest()
     {
         ResolveReferences();
+        // Long-pinch refresh: wipe the previous bubble set AND any stale radial
+        // menu so the user is looking at a clean slate before the new capture.
         if (bubbleSpawner != null) bubbleSpawner.ClearBubbles();
+        if (radialMenuSpawner != null) radialMenuSpawner.CloseCurrentMenu();
         if (_requestRoutine != null)
         {
             Debug.LogWarning($"[OBJECT_UI][WARN] request already active request_id={activeRequestId}");
@@ -380,13 +393,21 @@ public class ObjectUiRequestManager : MonoBehaviour
         if (det == null || det.bbox == null || det.bbox.Length < 4) return null;
         int width = FirstPositive(det.image_width, det.imageWidth, payload.image_width, payload.imageWidth, Screen.width);
         int height = FirstPositive(det.image_height, det.imageHeight, payload.image_height, payload.imageHeight, Screen.height);
-        return DetectionResult.FromXYXY(
+        DetectionResult result = DetectionResult.FromXYXY(
             requestId,
             FirstNonEmpty(det.label, det.class_name),
             det.confidence > 0f ? det.confidence : det.conf,
             det.bbox,
             width,
             height);
+        if (result != null)
+        {
+            result.gazeDir = new Vector3(det.gaze_dir_x, det.gaze_dir_y, det.gaze_dir_z);
+            result.depthMeters = det.depth_meters;
+            result.depthSource = det.depth_source;
+            result.objectId = det.object_id;
+        }
+        return result;
     }
 
     void CaptureGazeViewport(Camera cam, out Vector2 viewport, out bool hasViewport)
