@@ -6994,6 +6994,7 @@ MonoBehaviour:
   askQuestionCardPrefab: {fileID: 3190488951520297792, guid: 9c7357347a61c454aad4c74baba933ef, type: 3}
   askResultCardPrefab: {fileID: 8359107133757752391, guid: 9e328b0987ad6451782bd52c5fd024a6, type: 3}
   translateResultCardPrefab: {fileID: 6479749716276046289, guid: 1f36e23ae91aa4ed893cbae382d25e36, type: 3}
+  compareResultCardPrefab: {fileID: 2083513210916915705, guid: 77d54c19a537748afabb26a31611e26d, type: 3}
   anchorPinPrefab: {fileID: 1960211650334644200, guid: 16643e303c19a4ab38711739e648e72e, type: 3}
   noteManager: {fileID: 576430117}
   captureManager: {fileID: 358138115}

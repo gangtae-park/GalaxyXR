@@ -104,6 +104,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 323cba42ff84e457e9f6dbfe3517886b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StickyNote
-  autoColliderSizeMultiplier: 1.8
+  autoColliderSizeMultiplier: 1.5
   minColliderThickness: 0.05
   verboseLogging: 1

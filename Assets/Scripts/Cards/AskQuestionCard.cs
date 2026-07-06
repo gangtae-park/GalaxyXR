@@ -36,7 +36,7 @@ public class AskQuestionCard : MonoBehaviour
         if (titleText != null)
         {
             string safeName = string.IsNullOrEmpty(name) ? "Unknown" : name;
-            titleText.text = $"Ask about '{safeName}'";
+            titleText.text = $"{safeName}";
         }
         if (statusText != null && string.IsNullOrEmpty(SubmittedQuestion))
             statusText.text = listeningMessage;

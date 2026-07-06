@@ -46,6 +46,7 @@ public class ResultCardSpawner : MonoBehaviour
     public GameObject askQuestionCardPrefab;
     public GameObject askResultCardPrefab;
     public GameObject translateResultCardPrefab;
+    public GameObject compareResultCardPrefab;
     public GameObject anchorPinPrefab;
 
     [Header("Note flow (Save)")]
@@ -334,7 +335,7 @@ public class ResultCardSpawner : MonoBehaviour
                 break;
 
             case "Compare":
-                SpawnGenericResult(payload, ARPanelLayoutKind.CompareCard);
+                SpawnCompareResult(payload);
                 break;
 
             case "Capture":
@@ -556,6 +557,60 @@ public class ResultCardSpawner : MonoBehaviour
             // Stage missing or unknown -- fall back to translation-only legacy path.
             card.SetContent(translation);
         }
+    }
+
+    // ---------- Compare ----------
+
+    void SpawnCompareResult(VlmResultReceiver.VlmResultPayload payload)
+    {
+        if (compareResultCardPrefab == null)
+        {
+            // Graceful degrade: when the new prefab isn't wired yet, render as
+            // a generic Search-style card using the legacy result_search text.
+            Debug.LogWarning("[ResultCardSpawner] compareResultCardPrefab not assigned; falling back to SearchResultCard.");
+            SpawnGenericResult(payload, ARPanelLayoutKind.CompareCard);
+            return;
+        }
+        if (payload == null || payload.response == null) return;
+
+        ReplaceCurrentCard();
+
+        GameObject go = Instantiate(compareResultCardPrefab, ComputeCardSpawnPosition(payload, CardPlacementPolicy.OffsetUpperRightCloser), Quaternion.identity);
+        ApplyConstantSize(go);
+
+        CompareResultCard card = go.GetComponent<CompareResultCard>();
+        if (card != null)
+        {
+            string nameA = !string.IsNullOrEmpty(payload.response.name_a)
+                ? payload.response.name_a
+                : SplitNameAOrFallback(payload.response.name);
+            string nameB = !string.IsNullOrEmpty(payload.response.name_b)
+                ? payload.response.name_b
+                : SplitNameBOrFallback(payload.response.name);
+            card.SetContent(nameA, nameB, payload.response.compare_rows);
+        }
+
+        _currentCard = go;
+        if (verboseLogging)
+        {
+            int rowCount = payload.response.compare_rows != null ? payload.response.compare_rows.Length : 0;
+            Debug.Log($"[ResultCardSpawner] spawned CompareResultCard name='{payload.response.name}' rows={rowCount}");
+        }
+    }
+
+    // "A vs B" -> ("A", "B") split fallback when Python didn't populate name_a/name_b.
+    static string SplitNameAOrFallback(string pairName)
+    {
+        if (string.IsNullOrEmpty(pairName)) return "";
+        int idx = pairName.IndexOf(" vs ", System.StringComparison.OrdinalIgnoreCase);
+        return idx > 0 ? pairName.Substring(0, idx) : pairName;
+    }
+
+    static string SplitNameBOrFallback(string pairName)
+    {
+        if (string.IsNullOrEmpty(pairName)) return "";
+        int idx = pairName.IndexOf(" vs ", System.StringComparison.OrdinalIgnoreCase);
+        return idx > 0 && idx + 4 < pairName.Length ? pairName.Substring(idx + 4) : "";
     }
 
     // ---------- Search ----------

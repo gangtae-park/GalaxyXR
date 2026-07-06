@@ -141,6 +141,24 @@ public class GestureRouter : MonoBehaviour
 
     void OnDisable()
     {
+        // Mode change can fire while the user is mid-pinch (e.g. they pinched
+        // the dropdown to switch to UI Interaction). Without this cleanup,
+        // Python receives a START packet but no terminator -- the gesture
+        // hangs until the cached state ages out. Force a FAIL on every
+        // pending branch so the backend cleanly drops the in-flight session.
+        if (capturing) FinishWithReject("router_disabled");
+        if (compareReady) FinishCompareCancel("router_disabled");
+        if (savePending) FinishSaveCancel("router_disabled");
+        if (cameraPending) FinishCameraCancel("router_disabled");
+        if (translateReady) FinishTranslateCancel("router_disabled");
+
+        // Reset edge-trigger latches so a still-held pinch doesn't get
+        // mis-interpreted as a fresh press the moment OnEnable runs again.
+        _wasPressed = false;
+        _leftWasPressed = false;
+        saveRearmRequired = false;
+        cameraRearmRequired = false;
+
         pinchAction?.action.Disable();
         leftPinchAction?.action.Disable();
         rightPinchPositionAction?.action.Disable();

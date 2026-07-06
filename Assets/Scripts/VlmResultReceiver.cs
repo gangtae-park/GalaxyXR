@@ -14,6 +14,14 @@ Per-gesture spawners subscribe to OnResult, filter by payload.gesture, and insta
 public class VlmResultReceiver : MonoBehaviour
 {
     [Serializable]
+    public class CompareRow
+    {
+        public string category;
+        public string value_a;
+        public string value_b;
+    }
+
+    [Serializable]
     public class VlmResponse
     {
         public string name;
@@ -31,6 +39,11 @@ public class VlmResultReceiver : MonoBehaviour
         public string raw;
         public string finish_reason;
         public string refusal;
+        // Compare-specific: when the gesture is "Compare", these carry the two
+        // object names and the per-category table that CompareResultCard renders.
+        public string name_a;
+        public string name_b;
+        public CompareRow[] compare_rows;
         // Anchor info for distance-aware card placement. gaze_dir is the
         // head-space unit vector to the target (from Python inverse calibration
         // applied to the YOLO bbox centre); depth_meters comes from Depth
