@@ -48,6 +48,8 @@ public class ObjectUiRequestManager : MonoBehaviour
     public Camera referenceCamera;
 
     [Header("Object UI request")]
+    [Tooltip("Optional. When assigned (or Resources/NetworkSettings.asset exists), the endpoint is derived from that shared asset; objectUiServerUrl below is used only as a legacy fallback.")]
+    public NetworkSettings networkSettings;
     public string objectUiServerUrl = "http://192.168.0.3:5007/object_ui";
     [Tooltip("Used to be the 3 s delay between dropdown selection and capture. Now the trigger is the left-hand pinch hold (ObjectUiHandTrigger), so we capture immediately. Kept as a knob in case manual debug delay is wanted.")]
     public float captureDelaySeconds = 0.0f;
@@ -461,8 +463,13 @@ public class ObjectUiRequestManager : MonoBehaviour
 
     string ResolveObjectUiUrl()
     {
+        // 1) Shared NetworkSettings asset -- the intended single source of truth.
+        NetworkSettings s = networkSettings != null ? networkSettings : NetworkSettings.Instance;
+        if (s != null) return s.ObjectUiUrl;
+        // 2) Legacy: explicit URL field on this component.
         if (!string.IsNullOrWhiteSpace(objectUiServerUrl))
             return objectUiServerUrl;
+        // 3) Last-ditch: reuse MsgSender's serverIP with the default port/path.
         string host = msgSender != null && !string.IsNullOrWhiteSpace(msgSender.serverIP)
             ? msgSender.serverIP
             : "192.168.0.3";

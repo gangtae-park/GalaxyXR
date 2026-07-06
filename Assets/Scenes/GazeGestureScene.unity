@@ -683,13 +683,6 @@ MonoBehaviour:
   captureGestureName: Capture
   cameraHoldSeconds: 1.2
   translateGestureName: Translate
-  translateReadyTimeoutSeconds: 10
-  referenceCamera: {fileID: 0}
-  swipeWindowSeconds: 0.7
-  swipeMinLeftwardDistance: 0.15
-  swipeMinLeftwardVelocity: 0.3
-  verboseTranslateReadyLogging: 1
-  translateReadyLogIntervalSeconds: 1
   verboseCameraHoldLogging: 0
   cameraHoldLogIntervalSeconds: 0.5
   capturing: 0
@@ -704,11 +697,6 @@ MonoBehaviour:
   cameraPending: 0
   cameraRearmRequired: 0
   cameraHeldElapsed: 0
-  translateReady: 0
-  translateReadyElapsed: 0
-  swipeLeftwardDistance: 0
-  swipeLeftwardVelocity: 0
-  swipeReason: 
   lastPoseResult: 
 --- !u!114 &136429831
 MonoBehaviour:
@@ -6959,6 +6947,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6b465085260f84672acc81ced568d41b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MsgSender
+  networkSettings: {fileID: 11400000, guid: e94b28fd7ac351b2a86ef92c1a4d5e6f, type: 2}
   serverIP: 192.168.0.8
   port: 5005
   eyeGazeReader: {fileID: 198504609}
@@ -7043,6 +7032,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::AskVoiceInputController
   spawner: {fileID: 1110963237}
   speechBridge: {fileID: 6614100000000000005}
+  networkSettings: {fileID: 11400000, guid: e94b28fd7ac351b2a86ef92c1a4d5e6f, type: 2}
   voiceServerUrl: http://192.168.0.8:5007/ask_voice
   autoResolveReferences: 1
   verboseLogging: 1
@@ -7067,6 +7057,7 @@ MonoBehaviour:
   bubbleSpawner: {fileID: 6614300000000000002}
   eyeGazeReader: {fileID: 198504609}
   referenceCamera: {fileID: 1948693200}
+  networkSettings: {fileID: 11400000, guid: e94b28fd7ac351b2a86ef92c1a4d5e6f, type: 2}
   objectUiServerUrl: http://192.168.0.8:5007/object_ui
   captureDelaySeconds: 0
   jpegQuality: 65
@@ -14325,7 +14316,7 @@ MonoBehaviour:
   gazeControllers:
   - {fileID: 198504609}
   keepGazeEnabledInGestureOnly: 1
-  keepGazeEnabledInVoiceOnly: 0
+  keepGazeEnabledInVoiceOnly: 1
   keepGazeEnabledInUIOnly: 0
   objectUiRequestManager: {fileID: 1110963240}
   startObjectUiRequestOnUIOnly: 0
@@ -14405,15 +14396,17 @@ MonoBehaviour:
   permissionRequester: {fileID: 6614100000000000003}
   interactionLogger: {fileID: 6614100000000000004}
   resultCardSpawner: {fileID: 1110963237}
+  referenceCamera: {fileID: 1948693200}
+  eyeGazeReader: {fileID: 198504609}
   listenTimeoutSeconds: 10
   autoResolveReferences: 0
   verboseLogging: 1
   sendVoiceCommandPacket: 1
   routePendingAskCard: 1
   sendSnapshotVoiceRequest: 1
+  networkSettings: {fileID: 11400000, guid: e94b28fd7ac351b2a86ef92c1a4d5e6f, type: 2}
   voiceSnapshotServerUrl: http://192.168.0.8:5007/voice_command
-  snapshotJpegQuality: 55
-  snapshotReadyTimeoutSeconds: 1.5
+  voiceContextMaxAgeSeconds: 120
   waitingForFinalTranscript: 0
   lastTranscript: 
 --- !u!114 &6614100000000000009
@@ -14445,23 +14438,25 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::VoiceStatusPanel
   voiceInputManager: {fileID: 6614100000000000008}
   referenceCamera: {fileID: 1948693200}
-  distanceFromCamera: 0.9
-  verticalOffset: -0.22
+  distanceFromCamera: 0.7
+  verticalOffset: -0.28
   horizontalOffset: 0
-  panelSize: {x: 420, y: 110}
-  worldScale: 0.0012
-  listeningMessage: Listening... speak now
+  panelSize: {x: 420, y: 80}
+  worldScale: 0.001
+  listeningMessage: Listening...
   partialPrefix: 'Heard: '
   finalPrefix: 'Transcript: '
   errorPrefix: 'Voice error: '
   hideAfterFinalSeconds: 1.5
   hideAfterErrorSeconds: 2.5
-  backgroundColor: {r: 0.02, g: 0.02, b: 0.02, a: 0.86}
-  listeningColor: {r: 0.38, g: 0.82, b: 1, a: 1}
-  finalColor: {r: 0.75, g: 1, b: 0.75, a: 1}
-  errorColor: {r: 1, g: 0.55, b: 0.55, a: 1}
-  fontSize: 34
+  backgroundColor: {r: 0, g: 0, b: 0, a: 0}
+  listeningColor: {r: 0.38, g: 0.8627451, b: 1, a: 1}
+  finalColor: {r: 0.5747152, g: 0.990566, b: 0.65342796, a: 1}
+  errorColor: {r: 0.990566, g: 0.4906105, b: 0.4906105, a: 1}
+  fontSize: 18
   messageFont: {fileID: 11400000, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}
+  enableTextOutline: 1
+  textOutlineColor: {r: 0, g: 0, b: 0, a: 0.5882353}
 --- !u!114 &6614100000000000011
 MonoBehaviour:
   m_ObjectHideFlags: 0

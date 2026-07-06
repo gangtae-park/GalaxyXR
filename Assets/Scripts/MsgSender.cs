@@ -10,6 +10,8 @@ public class MsgSender : MonoBehaviour
     public static MsgSender Instance { get; private set; }
 
     [Header("Network")]
+    [Tooltip("Optional. When assigned (or when Resources/NetworkSettings.asset exists), serverIP/port below are ignored and the shared asset drives the address instead. Leave null to use the fields below as-is.")]
+    public NetworkSettings networkSettings;
     public string serverIP = "192.168.0.3";
     public int port = 5005;
 
@@ -42,8 +44,22 @@ public class MsgSender : MonoBehaviour
     void Start()
     {
         Instance = this;
+        ApplyNetworkSettings();
         client = new UdpClient();
         ResolveCaptureContextRegistry();
+    }
+
+    // Pull address + port from the shared NetworkSettings asset when it's
+    // available. Explicit inspector assignment wins; otherwise we probe
+    // Resources/NetworkSettings. Silently no-ops if neither is present, so
+    // the pre-existing serialized `serverIP` / `port` values keep working.
+    void ApplyNetworkSettings()
+    {
+        NetworkSettings settings = networkSettings != null ? networkSettings : NetworkSettings.Instance;
+        if (settings == null) return;
+        if (!string.IsNullOrEmpty(settings.serverIP)) serverIP = settings.serverIP;
+        if (settings.commandUdpPort > 0) port = settings.commandUdpPort;
+        Debug.Log($"[Study Log][SENDER] Network config from NetworkSettings: {serverIP}:{port}");
     }
 
     void OnEnable()

@@ -15,6 +15,8 @@ public class VoiceInputManager : MonoBehaviour
     public RuntimeAudioPermissionRequester permissionRequester;
     public InteractionLogger interactionLogger;
     public ResultCardSpawner resultCardSpawner;
+    public Camera referenceCamera;
+    public EyeGazeReader eyeGazeReader;
 
     [Header("Listening")]
     public float listenTimeoutSeconds = 10f;
@@ -26,18 +28,18 @@ public class VoiceInputManager : MonoBehaviour
     public bool sendVoiceCommandPacket = true;
     [Tooltip("When an Ask gesture card is waiting, use the transcript as that card's question instead of a standalone voice command.")]
     public bool routePendingAskCard = true;
-    [Tooltip("POST one JSON request containing the voice-start screenshot and final transcript. Falls back to the legacy UDP VOICE_COMMAND only when disabled.")]
+    [Tooltip("POST one JSON request containing the voice-start pose and final transcript. Python's /voice_command handler pairs the transcript with the ADB-stream frame captured at listen-start. Falls back to the legacy UDP VOICE_COMMAND only when disabled.")]
     public bool sendSnapshotVoiceRequest = true;
+    [Tooltip("Optional. When assigned (or Resources/NetworkSettings.asset exists), the endpoint is derived from that shared asset; voiceSnapshotServerUrl below is used only as a legacy fallback.")]
+    public NetworkSettings networkSettings;
     public string voiceSnapshotServerUrl = "http://192.168.0.3:5007/voice_command";
-    [Range(1, 100)] public int snapshotJpegQuality = 55;
-    public float snapshotReadyTimeoutSeconds = 1.5f;
+    public float voiceContextMaxAgeSeconds = 120f;
 
     [Header("Status")]
     [SerializeField] private bool waitingForFinalTranscript;
     [SerializeField] private string lastTranscript;
 
     private Coroutine _timeoutRoutine;
-    private Coroutine _snapshotRoutine;
     private VoiceRequestContext _activeVoiceRequest;
     public bool IsListening => waitingForFinalTranscript || (speechBridge != null && speechBridge.IsListening);
     public string LastTranscript => lastTranscript;
@@ -48,6 +50,13 @@ public class VoiceInputManager : MonoBehaviour
     public event Action<string> OnFinalTranscript;
     public event Action<string> OnVoiceError;
 
+    // Python's /voice_command handler no longer needs Unity to ship a JPG:
+    // Unity's ScreenCapture on Android XR only sees its own rendered output
+    // (passthrough video is OS-composited and never reaches the framebuffer),
+    // so the LLM was reasoning over a mostly empty scene. Instead we send the
+    // camera pose captured at listen-start; the Python side pairs the
+    // transcript with the ADB screenrecord frame it's already streaming from
+    // the device -- the same source the gesture handlers use.
     [Serializable]
     class VoiceSnapshotPayload
     {
@@ -60,24 +69,64 @@ public class VoiceInputManager : MonoBehaviour
         public int screen_width;
         public int screen_height;
         public string transcript;
+        // image_* intentionally empty: Python uses its ADB-stream frame.
         public string image_mime;
         public string image_base64;
         public int image_width;
         public int image_height;
+        public float camera_pos_x;
+        public float camera_pos_y;
+        public float camera_pos_z;
+        public float camera_rot_x;
+        public float camera_rot_y;
+        public float camera_rot_z;
+        public float camera_rot_w;
+        // Eye-gaze snapshot at listen-start. Normalized viewport coordinates
+        // (0..1, Unity convention: origin bottom-left). Python translates
+        // these to ADB frame pixels and injects them into the VLM prompt so
+        // GPT-5 can prioritise the gaze target when resolving pronouns --
+        // this is the core mechanism from GazePointAR (Lee et al., CHI '24).
+        public bool gaze_tracked;
+        public float gaze_viewport_x;
+        public float gaze_viewport_y;
+    }
+
+    struct CapturePoseSnapshot
+    {
+        public int screenWidth;
+        public int screenHeight;
+        public Vector3 cameraPosition;
+        public Quaternion cameraRotation;
+        public Matrix4x4 projectionMatrix;
+        public float verticalFov;
+        public float aspect;
+        public bool orthographic;
+        public float orthographicSize;
+
+        public static CapturePoseSnapshot From(Camera cam)
+        {
+            return new CapturePoseSnapshot
+            {
+                screenWidth = Screen.width,
+                screenHeight = Screen.height,
+                cameraPosition = cam != null ? cam.transform.position : Vector3.zero,
+                cameraRotation = cam != null ? cam.transform.rotation : Quaternion.identity,
+                projectionMatrix = cam != null ? cam.projectionMatrix : Matrix4x4.identity,
+                verticalFov = cam != null ? cam.fieldOfView : 60f,
+                aspect = cam != null ? cam.aspect : (Screen.height > 0 ? Screen.width / (float)Screen.height : 1.777f),
+                orthographic = cam != null && cam.orthographic,
+                orthographicSize = cam != null ? cam.orthographicSize : 5f
+            };
+        }
     }
 
     class VoiceRequestContext
     {
         public string requestId;
         public float listenStartedTime;
-        public bool captureComplete;
-        public string captureError;
-        public string imageMime = "image/jpeg";
-        public string imageBase64 = "";
-        public int imageWidth;
-        public int imageHeight;
-        public int screenWidth;
-        public int screenHeight;
+        public CapturePoseSnapshot capturePose;
+        public bool gazeTracked;
+        public Vector2 gazeViewport;
     }
 
     void Awake()
@@ -156,11 +205,7 @@ public class VoiceInputManager : MonoBehaviour
     public void CancelCurrentVoiceSession(string reason = "cancelled")
     {
         if (speechBridge != null && speechBridge.IsListening) speechBridge.CancelListening();
-        if (_snapshotRoutine != null)
-        {
-            StopCoroutine(_snapshotRoutine);
-            _snapshotRoutine = null;
-        }
+        _activeVoiceRequest = null;
         FinishListening(reason);
     }
 
@@ -240,16 +285,34 @@ public class VoiceInputManager : MonoBehaviour
             return;
         }
 
-        if (_snapshotRoutine != null)
-        {
-            StopCoroutine(_snapshotRoutine);
-            _snapshotRoutine = null;
-        }
+        Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
+        CapturePoseSnapshot pose = CapturePoseSnapshot.From(cam);
+        CaptureGazeViewport(cam, out Vector2 gazeViewport, out bool gazeTracked);
 
         string requestId = Guid.NewGuid().ToString("N");
         if (msgSender != null)
         {
-            string registered = msgSender.RegisterCaptureContextForRequest(requestId, "voice listening START");
+            // Register the listen-start camera pose so downstream anchor
+            // resolvers (VLM result handlers) can project response bboxes
+            // back into the world using the pose the user was looking with
+            // when they started speaking. image_width/height are 0 because
+            // the actual frame ships from Python's ADB stream and its dims
+            // come back in the response.
+            string registered = msgSender.RegisterCaptureSnapshotForRequest(
+                requestId,
+                "voice listening START",
+                0,
+                0,
+                pose.screenWidth,
+                pose.screenHeight,
+                pose.cameraPosition,
+                pose.cameraRotation,
+                pose.projectionMatrix,
+                pose.verticalFov,
+                pose.aspect,
+                pose.orthographic,
+                pose.orthographicSize,
+                voiceContextMaxAgeSeconds);
             if (!string.IsNullOrEmpty(registered)) requestId = registered;
         }
 
@@ -257,75 +320,53 @@ public class VoiceInputManager : MonoBehaviour
         {
             requestId = requestId,
             listenStartedTime = Time.unscaledTime,
-            screenWidth = Screen.width,
-            screenHeight = Screen.height,
+            capturePose = pose,
+            gazeTracked = gazeTracked,
+            gazeViewport = gazeViewport,
         };
 
-        _snapshotRoutine = StartCoroutine(CaptureVoiceStartSnapshot(_activeVoiceRequest));
-        if (verboseLogging) Debug.Log($"[VoiceInputManager] voice request started request_id={requestId}");
+        if (verboseLogging) Debug.Log($"[VoiceInputManager] voice request started request_id={requestId} camera_pos=({pose.cameraPosition.x:F3},{pose.cameraPosition.y:F3},{pose.cameraPosition.z:F3}) gaze_tracked={gazeTracked} gaze_viewport=({gazeViewport.x:F3},{gazeViewport.y:F3})");
     }
 
-    IEnumerator CaptureVoiceStartSnapshot(VoiceRequestContext context)
+    // Ports ObjectUiRequestManager.CaptureGazeViewport so voice_command carries
+    // the same normalised gaze coordinate. GazePointAR's key insight is that
+    // *explicit* gaze information disambiguates pronouns better than any
+    // "look at the center" heuristic; without this Python could only guess.
+    void CaptureGazeViewport(Camera cam, out Vector2 viewport, out bool hasViewport)
     {
-        yield return new WaitForEndOfFrame();
+        viewport = new Vector2(0.5f, 0.5f);
+        hasViewport = false;
+        if (cam == null || eyeGazeReader == null || !eyeGazeReader.LatestIsTracked)
+            return;
 
-        Texture2D texture = null;
-        try
-        {
-            texture = ScreenCapture.CaptureScreenshotAsTexture();
-            if (texture == null)
-                throw new InvalidOperationException("CaptureScreenshotAsTexture returned null.");
+        Vector3 gazeDir = eyeGazeReader.LatestGazeDirection;
+        if (gazeDir.sqrMagnitude < 0.0001f) return;
 
-            byte[] jpg = ImageConversion.EncodeToJPG(texture, Mathf.Clamp(snapshotJpegQuality, 1, 100));
-            context.imageBase64 = Convert.ToBase64String(jpg);
-            context.imageWidth = texture.width;
-            context.imageHeight = texture.height;
-            context.captureComplete = true;
-            context.captureError = "";
+        Vector3 world = cam.transform.position + gazeDir.normalized * 1.2f;
+        Vector3 vp = cam.WorldToViewportPoint(world);
+        if (vp.z <= 0f) return;
 
-            if (verboseLogging)
-                Debug.Log($"[VoiceInputManager] captured voice-start screenshot request_id={context.requestId} image={context.imageWidth}x{context.imageHeight} jpg_bytes={jpg.Length}");
-        }
-        catch (Exception e)
-        {
-            context.captureComplete = true;
-            context.captureError = e.Message;
-            Debug.LogWarning($"[VoiceInputManager] voice-start screenshot failed request_id={context.requestId}: {e.Message}");
-        }
-        finally
-        {
-            if (texture != null) Destroy(texture);
-            if (_snapshotRoutine != null) _snapshotRoutine = null;
-        }
+        viewport = new Vector2(Mathf.Clamp01(vp.x), Mathf.Clamp01(vp.y));
+        hasViewport = true;
     }
 
     void SendVoiceSnapshotOrFallback(string transcript, string fallbackPacketType)
     {
         if (sendSnapshotVoiceRequest && _activeVoiceRequest != null)
         {
-            StartCoroutine(PostVoiceSnapshotWhenReady(_activeVoiceRequest, transcript, fallbackPacketType));
+            StartCoroutine(PostVoiceRequest(_activeVoiceRequest, transcript, fallbackPacketType));
             return;
         }
 
         SendLegacyTextPacket(transcript, fallbackPacketType);
     }
 
-    IEnumerator PostVoiceSnapshotWhenReady(VoiceRequestContext context, string transcript, string fallbackPacketType)
+    IEnumerator PostVoiceRequest(VoiceRequestContext context, string transcript, string fallbackPacketType)
     {
-        float deadline = Time.realtimeSinceStartup + Mathf.Max(0.05f, snapshotReadyTimeoutSeconds);
-        while (!context.captureComplete && Time.realtimeSinceStartup < deadline)
-            yield return null;
-
-        if (string.IsNullOrEmpty(context.imageBase64))
+        string url = ResolveVoiceCommandUrl();
+        if (string.IsNullOrWhiteSpace(url))
         {
-            Debug.LogWarning($"[VoiceInputManager] voice snapshot unavailable request_id={context.requestId}; falling back to {fallbackPacketType}. captureError={context.captureError}");
-            SendLegacyTextPacket(transcript, fallbackPacketType);
-            yield break;
-        }
-
-        if (string.IsNullOrWhiteSpace(voiceSnapshotServerUrl))
-        {
-            Debug.LogWarning("[VoiceInputManager] voiceSnapshotServerUrl is empty; falling back to legacy voice packet.");
+            Debug.LogWarning("[VoiceInputManager] voice command URL unresolved; falling back to legacy voice packet.");
             SendLegacyTextPacket(transcript, fallbackPacketType);
             yield break;
         }
@@ -338,40 +379,60 @@ public class VoiceInputManager : MonoBehaviour
             gesture = "VoiceAsk",
             listen_started_unscaled_time = context.listenStartedTime,
             transcript_final_unscaled_time = Time.unscaledTime,
-            screen_width = context.screenWidth,
-            screen_height = context.screenHeight,
+            screen_width = context.capturePose.screenWidth,
+            screen_height = context.capturePose.screenHeight,
             transcript = transcript ?? "",
-            image_mime = context.imageMime,
-            image_base64 = context.imageBase64,
-            image_width = context.imageWidth,
-            image_height = context.imageHeight,
+            // Intentionally empty: Python's /voice_command handler uses its
+            // ADB-stream frame (state.latest_frame) and reports actual dims
+            // in the VLM response.
+            image_mime = "",
+            image_base64 = "",
+            image_width = 0,
+            image_height = 0,
+            camera_pos_x = context.capturePose.cameraPosition.x,
+            camera_pos_y = context.capturePose.cameraPosition.y,
+            camera_pos_z = context.capturePose.cameraPosition.z,
+            camera_rot_x = context.capturePose.cameraRotation.x,
+            camera_rot_y = context.capturePose.cameraRotation.y,
+            camera_rot_z = context.capturePose.cameraRotation.z,
+            camera_rot_w = context.capturePose.cameraRotation.w,
+            gaze_tracked = context.gazeTracked,
+            gaze_viewport_x = context.gazeViewport.x,
+            gaze_viewport_y = context.gazeViewport.y,
         };
 
         string json = JsonUtility.ToJson(payload);
         byte[] body = Encoding.UTF8.GetBytes(json);
 
-        using (UnityWebRequest request = new UnityWebRequest(voiceSnapshotServerUrl, "POST"))
+        using (UnityWebRequest request = new UnityWebRequest(url, "POST"))
         {
             request.uploadHandler = new UploadHandlerRaw(body);
             request.downloadHandler = new DownloadHandlerBuffer();
             request.SetRequestHeader("Content-Type", "application/json; charset=utf-8");
 
             if (verboseLogging)
-                Debug.Log($"[VoiceInputManager] POST voice snapshot request_id={context.requestId} bytes={body.Length} url={voiceSnapshotServerUrl}");
+                Debug.Log($"[VoiceInputManager] POST voice request request_id={context.requestId} bytes={body.Length} url={url}");
 
             yield return request.SendWebRequest();
 
             if (request.result == UnityWebRequest.Result.Success)
             {
                 if (verboseLogging)
-                    Debug.Log($"[VoiceInputManager] voice snapshot POST accepted request_id={context.requestId} code={request.responseCode} body={request.downloadHandler.text}");
+                    Debug.Log($"[VoiceInputManager] voice request POST accepted request_id={context.requestId} code={request.responseCode} body={request.downloadHandler.text}");
             }
             else
             {
-                Debug.LogWarning($"[VoiceInputManager] voice snapshot POST failed request_id={context.requestId}: {request.error} ({request.result}); falling back to {fallbackPacketType}.");
+                Debug.LogWarning($"[VoiceInputManager] voice request POST failed request_id={context.requestId}: {request.error} ({request.result}); falling back to {fallbackPacketType}.");
                 SendLegacyTextPacket(transcript, fallbackPacketType);
             }
         }
+    }
+
+    string ResolveVoiceCommandUrl()
+    {
+        NetworkSettings s = networkSettings != null ? networkSettings : NetworkSettings.Instance;
+        if (s != null) return s.VoiceCommandUrl;
+        return voiceSnapshotServerUrl;
     }
 
     void SendLegacyTextPacket(string transcript, string packetType)
@@ -520,6 +581,8 @@ public class VoiceInputManager : MonoBehaviour
         if (permissionRequester == null) permissionRequester = FindObjectOfType<RuntimeAudioPermissionRequester>();
         if (interactionLogger == null) interactionLogger = FindObjectOfType<InteractionLogger>();
         if (resultCardSpawner == null) resultCardSpawner = FindObjectOfType<ResultCardSpawner>();
+        if (referenceCamera == null) referenceCamera = Camera.main;
+        if (eyeGazeReader == null) eyeGazeReader = FindObjectOfType<EyeGazeReader>();
     }
 
     void LogSuccess(string packetType, string transcript)

@@ -10,11 +10,11 @@ public class VoiceStatusPanel : MonoBehaviour
     public Camera referenceCamera;
 
     [Header("Placement")]
-    public float distanceFromCamera = 0.9f;
+    public float distanceFromCamera = 0.7f;
     public float verticalOffset = -0.22f;
     public float horizontalOffset = 0f;
-    public Vector2 panelSize = new Vector2(420f, 110f);
-    public float worldScale = 0.0012f;
+    public Vector2 panelSize = new Vector2(420f, 90f);
+    public float worldScale = 0.001f;
 
     [Header("Messages")]
     public string listeningMessage = "Listening... speak now";
@@ -25,12 +25,14 @@ public class VoiceStatusPanel : MonoBehaviour
     public float hideAfterErrorSeconds = 2.5f;
 
     [Header("Style")]
-    public Color backgroundColor = new Color(0.02f, 0.02f, 0.02f, 0.86f);
+    public Color backgroundColor = new Color(0f, 0f, 0f, 0f);
     public Color listeningColor = new Color(0.38f, 0.82f, 1f, 1f);
     public Color finalColor = new Color(0.75f, 1f, 0.75f, 1f);
     public Color errorColor = new Color(1f, 0.55f, 0.55f, 1f);
-    public int fontSize = 34;
+    public int fontSize = 26;
     public TMP_FontAsset messageFont;
+    public bool enableTextOutline = true;
+    public Color textOutlineColor = new Color(0f, 0f, 0f, 0.85f);
 
     private GameObject _panelRoot;
     private TMP_Text _messageText;
@@ -195,8 +197,8 @@ public class VoiceStatusPanel : MonoBehaviour
         RectTransform textRect = textObject.GetComponent<RectTransform>();
         textRect.anchorMin = Vector2.zero;
         textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = new Vector2(24f, 14f);
-        textRect.offsetMax = new Vector2(-24f, -14f);
+        textRect.offsetMin = new Vector2(12f, 6f);
+        textRect.offsetMax = new Vector2(-12f, -6f);
 
         _messageText = textObject.GetComponent<TMP_Text>();
         if (messageFont != null) _messageText.font = messageFont;
@@ -204,6 +206,15 @@ public class VoiceStatusPanel : MonoBehaviour
         _messageText.alignment = TextAlignmentOptions.Center;
         _messageText.enableWordWrapping = true;
         _messageText.raycastTarget = false;
+        if (enableTextOutline)
+        {
+            // Assigning to .fontMaterial gives us a per-renderer instance so
+            // we don't mutate the shared font asset material (which would put
+            // a fat black outline on every other TMP text in the scene).
+            Material instanced = _messageText.fontMaterial;
+            instanced.SetColor(ShaderUtilities.ID_OutlineColor, textOutlineColor);
+            instanced.SetFloat(ShaderUtilities.ID_OutlineWidth, 0.2f);
+        }
 
         _panelRoot.SetActive(false);
     }

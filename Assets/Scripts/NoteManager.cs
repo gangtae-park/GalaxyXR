@@ -54,6 +54,10 @@ public class NoteManager : MonoBehaviour
 
     private GameObject _openCard;          // current SaveNoteCard or ViewNoteCard instance
     private Note _editingNote;             // non-null while a SaveNoteCard is editing an existing note
+    // While a ViewNoteCard (or its Edit-mode SaveNoteCard) is open for a note,
+    // the note's own StickyNote is hidden -- sticky and card should never both
+    // be visible at once. Restored when the card closes.
+    private Note _hiddenStickyNote;
 
     // ---------- Public entry: called by ResultCardSpawner ----------
 
@@ -75,6 +79,9 @@ public class NoteManager : MonoBehaviour
                 if (verboseLogging) Debug.Log("[NoteManager] a card is already open; ignoring new BeginNote.");
                 return;
             }
+            // Switching context to a new object -- reveal whichever sticky was
+            // hidden by the card we're about to replace.
+            RestoreHiddenSticky();
             CloseOpenCard();
         }
 
@@ -84,7 +91,7 @@ public class NoteManager : MonoBehaviour
 
     // ---------- SaveNoteCard ----------
 
-    void SpawnSaveCard(string objectId, string objectName, string existingText, Vector3 pos, Quaternion rot)
+    void SpawnSaveCard(string objectId, string objectName, string existingText, Vector3 pos, Quaternion rot, bool overwriteExisting = false)
     {
         var go = Instantiate(saveNoteCardPrefab, pos, rot);
         EnsureConstantSize(go);
@@ -95,13 +102,13 @@ public class NoteManager : MonoBehaviour
             Destroy(go);
             return;
         }
-        card.SetContent(objectId, objectName, existingText);
+        card.SetContent(objectId, objectName, existingText, overwriteExisting);
         card.OnSaveClicked   += text => HandleSaveCommitted(card, text);
         card.OnCancelClicked += () => HandleCardDismissed(go);
         card.OnCloseClicked  += () => HandleCardDismissed(go);
         _openCard = go;
         if (verboseLogging)
-            Debug.Log($"[NoteManager] SaveNoteCard opened (object={objectName}, editing={_editingNote != null}).");
+            Debug.Log($"[NoteManager] SaveNoteCard opened (object={objectName}, editing={_editingNote != null}, overwrite={overwriteExisting}).");
     }
 
     void HandleSaveCommitted(SaveNoteCard card, string text)
@@ -113,11 +120,13 @@ public class NoteManager : MonoBehaviour
 
         if (_editingNote != null)
         {
-            // Edit flow: update text + keep sticky as-is.
+            // Edit flow: update text + keep sticky as-is (the sticky was hidden
+            // while the edit card was open; RestoreHiddenSticky brings it back).
             _editingNote.text = text;
             if (verboseLogging)
                 Debug.Log($"[NoteManager] note {_editingNote.id} updated (len={text?.Length ?? 0}).");
             _editingNote = null;
+            RestoreHiddenSticky();
         }
         else
         {
@@ -144,12 +153,38 @@ public class NoteManager : MonoBehaviour
         if (_openCard == card) CloseOpenCard();
         else if (card != null) Destroy(card);
         _editingNote = null;
+        RestoreHiddenSticky();
     }
 
     void CloseOpenCard()
     {
         if (_openCard != null) Destroy(_openCard);
         _openCard = null;
+    }
+
+    // ---------- StickyNote visibility helpers ----------
+
+    void HideStickyForCardSession(Note note)
+    {
+        if (note == null || note.stickyInstance == null) return;
+        // Restore any previously hidden sticky first (paranoid safety: e.g.
+        // the user pinches sticky B while a card for note A is already open).
+        RestoreHiddenSticky();
+        note.stickyInstance.gameObject.SetActive(false);
+        _hiddenStickyNote = note;
+        if (verboseLogging)
+            Debug.Log($"[NoteManager] sticky for note {note.id} hidden while its card is open.");
+    }
+
+    void RestoreHiddenSticky()
+    {
+        if (_hiddenStickyNote == null) return;
+        StickyNote sticky = _hiddenStickyNote.stickyInstance;
+        if (sticky != null && sticky.gameObject != null)
+            sticky.gameObject.SetActive(true);
+        if (verboseLogging)
+            Debug.Log($"[NoteManager] sticky for note {_hiddenStickyNote.id} restored.");
+        _hiddenStickyNote = null;
     }
 
     // ---------- StickyNote ----------
@@ -185,7 +220,14 @@ public class NoteManager : MonoBehaviour
             Debug.LogWarning($"[NoteManager] pinch on sticky for unknown note id={sticky.NoteId}.");
             return;
         }
-        if (singleOpenCard && _openCard != null) CloseOpenCard();
+        if (singleOpenCard && _openCard != null)
+        {
+            // Any previously hidden sticky (from a card we're about to replace)
+            // needs to reappear before we hide this new one.
+            RestoreHiddenSticky();
+            CloseOpenCard();
+        }
+        HideStickyForCardSession(note);
         SpawnViewCard(note);
     }
 
@@ -221,11 +263,13 @@ public class NoteManager : MonoBehaviour
     {
         // Swap the view for a SaveNoteCard prefilled with the current text.
         // Save commit will UPDATE this same Note record (because _editingNote is set).
+        // overwriteExisting=true so the first STT partial replaces the shown
+        // text -- there's no keyboard for surgical edits, so Edit == redo.
         Vector3 pos = view.transform.position;
         Quaternion rot = view.transform.rotation;
         CloseOpenCard();
         _editingNote = note;
-        SpawnSaveCard(note.objectId, note.objectName, note.text, pos, rot);
+        SpawnSaveCard(note.objectId, note.objectName, note.text, pos, rot, overwriteExisting: true);
     }
 
     void HandleDelete(ViewNoteCard view, Note note)
@@ -234,6 +278,9 @@ public class NoteManager : MonoBehaviour
             Debug.Log($"[NoteManager] note {note.id} deleted.");
         if (note.stickyInstance != null) Destroy(note.stickyInstance.gameObject);
         _notes.Remove(note);
+        // Sticky is gone -- clear the hidden reference so RestoreHiddenSticky
+        // doesn't try to re-enable a destroyed GameObject on future dismiss.
+        if (_hiddenStickyNote == note) _hiddenStickyNote = null;
         CloseOpenCard();
     }
 

@@ -32,7 +32,9 @@ public class AskVoiceInputController : MonoBehaviour
     public AndroidSpeechRecognizerBridge speechBridge;
 
     [Header("Network")]
-    [Tooltip("MacProgram endpoint that accepts {transcript, request_id} JSON and dispatches process_ask_question.")]
+    [Tooltip("Optional. When assigned (or when Resources/NetworkSettings.asset exists), the endpoint is derived from that shared asset and voiceServerUrl below is ignored.")]
+    public NetworkSettings networkSettings;
+    [Tooltip("MacProgram endpoint that accepts {transcript, request_id} JSON. Used only when NetworkSettings is unavailable.")]
     public string voiceServerUrl = "http://192.168.0.3:5007/ask_voice";
 
     [Header("Behavior")]
@@ -141,14 +143,15 @@ public class AskVoiceInputController : MonoBehaviour
         string json = JsonUtility.ToJson(payload);
         byte[] body = Encoding.UTF8.GetBytes(json);
 
-        using (UnityWebRequest request = new UnityWebRequest(voiceServerUrl, "POST"))
+        string url = ResolveVoiceServerUrl();
+        using (UnityWebRequest request = new UnityWebRequest(url, "POST"))
         {
             request.uploadHandler = new UploadHandlerRaw(body);
             request.downloadHandler = new DownloadHandlerBuffer();
             request.SetRequestHeader("Content-Type", "application/json; charset=utf-8");
 
             if (verboseLogging)
-                Debug.Log($"[AskVoice] POST transcript request_id={requestId} bytes={body.Length} url={voiceServerUrl}");
+                Debug.Log($"[AskVoice] POST transcript request_id={requestId} bytes={body.Length} url={url}");
 
             yield return request.SendWebRequest();
 
@@ -157,6 +160,13 @@ public class AskVoiceInputController : MonoBehaviour
             else
                 Debug.LogError($"[AskVoice] POST FAILED: {request.error} ({request.result})");
         }
+    }
+
+    string ResolveVoiceServerUrl()
+    {
+        NetworkSettings s = networkSettings != null ? networkSettings : NetworkSettings.Instance;
+        if (s != null) return s.AskVoiceUrl;
+        return voiceServerUrl;
     }
 
     void SubscribeBridge()

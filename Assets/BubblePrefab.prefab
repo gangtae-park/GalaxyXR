@@ -112,7 +112,7 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 1
+  m_Radius: 0.6
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &6609367136397734092
 MonoBehaviour:
@@ -127,6 +127,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ObjectDetectionBubble
   referenceCamera: {fileID: 0}
+  verboseLogging: 1
 --- !u!114 &4719905159070951878
 MonoBehaviour:
   m_ObjectHideFlags: 0
