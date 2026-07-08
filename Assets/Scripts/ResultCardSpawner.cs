@@ -400,6 +400,25 @@ public class ResultCardSpawner : MonoBehaviour
             ? Quaternion.LookRotation(cam.transform.forward, Vector3.up)
             : Quaternion.identity;
 
+        // Voice Save shortcut: when Python's classifier parsed a note body
+        // out of the transcript (e.g. "3시 회의라고 저장해줘"), it lands in
+        // response.note_text. Commit the sticky directly so the user
+        // doesn't have to re-type what they already said.
+        string preFilledNote = payload.response.note_text ?? "";
+        if (!string.IsNullOrEmpty(preFilledNote))
+        {
+            noteManager.CommitNoteDirectly(
+                payload.response.object_id ?? "",
+                payload.response.name ?? "",
+                preFilledNote,
+                pos,
+                rot
+            );
+            if (verboseLogging)
+                Debug.Log($"[ResultCardSpawner] Save (voice) -> NoteManager.CommitNoteDirectly(name='{payload.response.name}', id='{payload.response.object_id}', text_len={preFilledNote.Length}).");
+            return;
+        }
+
         noteManager.BeginNote(
             payload.response.object_id ?? "",
             payload.response.name ?? "",

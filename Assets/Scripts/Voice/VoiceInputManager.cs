@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -89,6 +90,15 @@ public class VoiceInputManager : MonoBehaviour
         public bool gaze_tracked;
         public float gaze_viewport_x;
         public float gaze_viewport_y;
+        // Continuous gaze trail sampled from listen-start to transcript-final.
+        // Python uses this list (converted to top-left origin) as the
+        // gesture-flow-equivalent norm_points, so the YOLO overlap check
+        // reflects everywhere the user actually looked WHILE speaking --
+        // instead of a stale snapshot from the moment listening began.
+        // Two parallel float arrays because Unity's JsonUtility can't
+        // serialise a List<Vector2> without a wrapper.
+        public float[] gaze_trail_x;
+        public float[] gaze_trail_y;
     }
 
     struct CapturePoseSnapshot
@@ -127,6 +137,10 @@ public class VoiceInputManager : MonoBehaviour
         public CapturePoseSnapshot capturePose;
         public bool gazeTracked;
         public Vector2 gazeViewport;
+        // Trail sampled by Update() while waitingForFinalTranscript is true.
+        // Coalesces near-duplicate samples so a still user with a stable gaze
+        // doesn't flood the payload with a thousand identical points.
+        public List<Vector2> gazeTrail = new List<Vector2>(256);
     }
 
     void Awake()
@@ -144,6 +158,47 @@ public class VoiceInputManager : MonoBehaviour
     {
         CancelCurrentVoiceSession("disabled");
         UnsubscribeBridge();
+    }
+
+    void Update()
+    {
+        // Buffer the gaze trail throughout the utterance (listen-start ->
+        // transcript-final). Python will use these points to build the
+        // YOLO-overlap gaze bbox, so the target reflects everywhere the
+        // user actually looked WHILE speaking rather than a single
+        // snapshot from the moment listening began.
+        if (!waitingForFinalTranscript || _activeVoiceRequest == null) return;
+        AppendGazeSample();
+    }
+
+    void AppendGazeSample()
+    {
+        if (eyeGazeReader == null || !eyeGazeReader.LatestIsTracked) return;
+
+        Camera cam = referenceCamera != null ? referenceCamera : Camera.main;
+        if (cam == null) return;
+
+        Vector3 gazeDir = eyeGazeReader.LatestGazeDirection;
+        if (gazeDir.sqrMagnitude < 0.0001f) return;
+
+        Vector3 world = cam.transform.position + gazeDir.normalized * 1.2f;
+        Vector3 vp = cam.WorldToViewportPoint(world);
+        if (vp.z <= 0f) return;
+
+        Vector2 sample = new Vector2(Mathf.Clamp01(vp.x), Mathf.Clamp01(vp.y));
+
+        // Coalesce near-identical consecutive samples so a still user with a
+        // rock-steady gaze doesn't ship a thousand duplicates. 0.5% of
+        // viewport (~5 px on a 1080-wide frame) is well below what YOLO
+        // overlap cares about.
+        List<Vector2> trail = _activeVoiceRequest.gazeTrail;
+        if (trail.Count > 0)
+        {
+            Vector2 last = trail[trail.Count - 1];
+            if (Mathf.Abs(sample.x - last.x) < 0.005f && Mathf.Abs(sample.y - last.y) < 0.005f)
+                return;
+        }
+        trail.Add(sample);
     }
 
     public void SetInputMode(InputMode mode)
@@ -328,6 +383,15 @@ public class VoiceInputManager : MonoBehaviour
         if (verboseLogging) Debug.Log($"[VoiceInputManager] voice request started request_id={requestId} camera_pos=({pose.cameraPosition.x:F3},{pose.cameraPosition.y:F3},{pose.cameraPosition.z:F3}) gaze_tracked={gazeTracked} gaze_viewport=({gazeViewport.x:F3},{gazeViewport.y:F3})");
     }
 
+    static float[] ExtractTrailComponent(List<Vector2> trail, bool takeX)
+    {
+        if (trail == null || trail.Count == 0) return new float[0];
+        float[] arr = new float[trail.Count];
+        for (int i = 0; i < trail.Count; i++)
+            arr[i] = takeX ? trail[i].x : trail[i].y;
+        return arr;
+    }
+
     // Ports ObjectUiRequestManager.CaptureGazeViewport so voice_command carries
     // the same normalised gaze coordinate. GazePointAR's key insight is that
     // *explicit* gaze information disambiguates pronouns better than any
@@ -352,6 +416,25 @@ public class VoiceInputManager : MonoBehaviour
 
     void SendVoiceSnapshotOrFallback(string transcript, string fallbackPacketType)
     {
+        // Freeze the head-pose snapshot ResultCardSpawner uses to place cards.
+        // Gesture flow does this in HandleGestureRecognized (fired by
+        // GestureRouter at gesture END). Voice has no gesture event, so we
+        // fire the symmetric snapshot at transcript-final -- the moment
+        // closest to Python's ADB frame grab. Without this the spawner
+        // reuses a stale snapshot from an earlier gesture (or falls back to
+        // the current camera which drifts during the 1-3 s VLM round trip),
+        // and voice-triggered cards land in the wrong world position.
+        //
+        // Skip when a gesture-triggered AskQuestionCard is waiting: that
+        // flow already captured its own snapshot at gesture END, aimed at
+        // the object the user pinched. Overwriting it here would move the
+        // AskResultCard to wherever the user's head is now, not to the
+        // gestured object.
+        bool gestureAskPending = resultCardSpawner != null
+            && resultCardSpawner.PendingAskQuestion != null;
+        if (resultCardSpawner != null && !gestureAskPending)
+            resultCardSpawner.CaptureCurrentGazeSnapshot("voice transcript-final");
+
         if (sendSnapshotVoiceRequest && _activeVoiceRequest != null)
         {
             StartCoroutine(PostVoiceRequest(_activeVoiceRequest, transcript, fallbackPacketType));
@@ -399,6 +482,8 @@ public class VoiceInputManager : MonoBehaviour
             gaze_tracked = context.gazeTracked,
             gaze_viewport_x = context.gazeViewport.x,
             gaze_viewport_y = context.gazeViewport.y,
+            gaze_trail_x = ExtractTrailComponent(context.gazeTrail, true),
+            gaze_trail_y = ExtractTrailComponent(context.gazeTrail, false),
         };
 
         string json = JsonUtility.ToJson(payload);
@@ -411,7 +496,7 @@ public class VoiceInputManager : MonoBehaviour
             request.SetRequestHeader("Content-Type", "application/json; charset=utf-8");
 
             if (verboseLogging)
-                Debug.Log($"[VoiceInputManager] POST voice request request_id={context.requestId} bytes={body.Length} url={url}");
+                Debug.Log($"[VoiceInputManager] POST voice request request_id={context.requestId} bytes={body.Length} gaze_trail_pts={context.gazeTrail.Count} url={url}");
 
             yield return request.SendWebRequest();
 

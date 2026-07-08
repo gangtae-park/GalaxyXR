@@ -4,58 +4,24 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.XR.Hands;
 
-/*
-CaptureControlCard
-
-The semi-transparent rectangle that pops up over a recognised object while
-the user is still in the camera-frame pose. Behaviour:
-
-  - Centre = spawn anchor + (current wrist-midpoint - wrist-midpoint at spawn).
-    So the card starts ON the object and then translates by the DELTA the
-    user's hand-midpoint moves from its spawn pose -- like a remote-control
-    grip. Hands held still at spawn pose -> card stays on object; hands move
-    together by 10 cm -> card translates by 10 cm. If tracking on either
-    hand is lost, the card just stays at its last good position.
-  - Width / height starts at the bbox-derived initialWorldSize at spawn, then
-    each frame is adjusted by the DELTA of wrist separation from its baseline
-    (first-tracked-frame value), scaled by resizeSensitivity. So hands held in
-    the spawn pose -> card stays at initial size; spread hands by 10 cm with
-    sensitivity 0.5 -> card grows by 5 cm. Uses wrists (not pinch position)
-    because the wrist barely jitters during the pinch micro-motion.
-  - Card billboards to the camera so it always faces the user.
-  - Shutter trigger: both pinch actions pressed at the same time. Fires once
-    via OnShutterFired (CaptureManager destroys the card).
-  - Timeout: shutterTimeoutSeconds after spawn with no shutter -> OnTimedOut.
-
-The shutter does NOT actually take a screenshot yet -- per the current spec,
-firing the event is enough; the spawner just dismisses the card. Hook a real
-screenshot routine to OnShutterFired later.
-*/
 public class CaptureControlCard : MonoBehaviour
 {
-    [Header("Refs (set in prefab Inspector)")]
-    [Tooltip("Optional child Transform whose localScale carries the visual rectangle. If null, this GameObject's scale is used. Useful when the prefab root needs its own scale and only a child quad/panel should resize.")]
+    [Header("Refs")]
     public Transform sizeTarget;
 
     [Header("Timing")]
-    [Tooltip("Auto-close if no two-hand pinch within this many seconds.")]
     public float shutterTimeoutSeconds = 10f;
 
     [Header("Sizing")]
-    [Tooltip("Minimum world-space rectangle size (metres). Prevents the card collapsing to invisibility when hands meet.")]
     public Vector2 minWorldSize = new Vector2(0.08f, 0.08f);
-    [Tooltip("Maximum world-space rectangle size (metres). Stops runaway when a hand is briefly tracked at a weird position.")]
     public Vector2 maxWorldSize = new Vector2(3f, 3f);
-    [Tooltip("Multiplier on hand-movement -> size change. 1.0 = move hands apart by 10 cm, card grows by 10 cm. 0.5 = card grows by 5 cm. Lower this if the rectangle feels jumpy.")]
     [Range(0.05f, 2f)] public float resizeSensitivity = 0.5f;
 
     [Header("Pinch threshold")]
     [Range(0f, 1f)] public float pinchValueThreshold = 0.9f;
 
     [Header("Axis tuning")]
-    [Tooltip("Mirror the rectangle horizontally (multiplies localScale.x by -1). Toggle if the visual flips left/right after resizing.")]
     public bool invertX = false;
-    [Tooltip("Mirror the rectangle vertically (multiplies localScale.y by -1). Toggle if the visual flips top/bottom -- typically a prefab pivot or quad orientation issue.")]
     public bool invertY = false;
 
     [Header("Debug")]
@@ -73,11 +39,10 @@ public class CaptureControlCard : MonoBehaviour
     private float _spawnTime;
     private bool _fired;
     private Vector3 _wristMidpointAtSpawn;
-    private Vector3 _baselineHandDiff;       // (rh - lh) at first tracked frame; size delta is measured from this
-    private Vector2 _initialWorldSize;       // bbox-derived size handed in at Initialize; the baseline for the rectangle
+    private Vector3 _baselineHandDiff;
+    private Vector2 _initialWorldSize;
     private bool _haveWristBaseline;
 
-    /// <summary>Called by CaptureManager right after Instantiate.</summary>
     public void Initialize(
         Vector3 centerWorldPos,
         Vector2 initialWorldSize,
@@ -93,8 +58,6 @@ public class CaptureControlCard : MonoBehaviour
         _rightPinch = rightPinch?.action; _rightPinch?.Enable();
         _leftPinch  = leftPinch?.action;  _leftPinch?.Enable();
         TryGetHandSubsystem(out _handSubsystem);
-        // Baseline captured on the first frame BOTH wrists are tracked, not here --
-        // wrists may not be available yet on the very frame of Initialize().
         _haveWristBaseline = false;
         _initialWorldSize = initialWorldSize;
 
@@ -110,12 +73,6 @@ public class CaptureControlCard : MonoBehaviour
     {
         if (_fired) return;
 
-        // Position: midpoint of the two wrists when both are tracked so the
-        // card translates as the user moves both hands together. Falls back
-        // to the initial spawn anchor when tracking is lost, so the card
-        // doesn't jump or vanish mid-motion.
-        // Split the two reads so both `out` parameters are unconditionally assigned
-        // (with `&&` the second call would short-circuit when the first fails).
         bool hasRh = TryGetWristPos(true, out Vector3 rh);
         bool hasLh = TryGetWristPos(false, out Vector3 lh);
         bool hasBoth = hasRh && hasLh;
@@ -125,24 +82,17 @@ public class CaptureControlCard : MonoBehaviour
             Vector3 midpoint = (rh + lh) * 0.5f;
             if (!_haveWristBaseline)
             {
-                // First frame both wrists are tracked: this pose becomes the
-                // "neutral" reference. Position is anchored at the spawn point
-                // and resize starts at the bbox-derived initial size. Both
-                // adjust by DELTA from these baselines.
                 _wristMidpointAtSpawn = midpoint;
                 _baselineHandDiff = rh - lh;
                 _haveWristBaseline = true;
             }
             transform.position = _centerWorldPos + (midpoint - _wristMidpointAtSpawn);
         }
-        // else: leave transform.position at its last good value (set previously, or
-        // _centerWorldPos from Initialize) -- avoids jumps when tracking blinks out.
         BillboardToCamera();
 
         if (hasBoth)
             ApplySizeFromHands(rh, lh);
 
-        // Shutter: both pinches pressed simultaneously.
         if (ReadPressed(_rightPinch) && ReadPressed(_leftPinch))
         {
             FireShutter();
@@ -159,9 +109,6 @@ public class CaptureControlCard : MonoBehaviour
     {
         Transform t = sizeTarget != null ? sizeTarget : transform;
         Vector3 s = t.localScale;
-        // Sign on each axis is a separate user-toggle (Inspector). Magnitude is always
-        // |worldSize|; the sign flips the mesh on that axis (mirror), which is the
-        // workaround for prefabs whose visible face / pivot is oriented backwards.
         s.x = (invertX ? -1f : 1f) * Mathf.Abs(worldSize.x);
         s.y = (invertY ? -1f : 1f) * Mathf.Abs(worldSize.y);
         t.localScale = s;
@@ -169,9 +116,6 @@ public class CaptureControlCard : MonoBehaviour
 
     void ApplySizeFromHands(Vector3 rh, Vector3 lh)
     {
-        // Delta-based resize: card size = initialWorldSize + (wrist-separation
-        // delta from baseline) * sensitivity. Both projections use the CURRENT
-        // local axes so billboard rotation drift cancels out.
         Vector3 currentDiff  = rh - lh;
         Vector3 baselineDiff = _baselineHandDiff;
         float currentX  = Mathf.Abs(Vector3.Dot(currentDiff,  transform.right));
@@ -191,7 +135,6 @@ public class CaptureControlCard : MonoBehaviour
         if (_camera == null) return;
         Vector3 toCam = _camera.transform.position - transform.position;
         if (toCam.sqrMagnitude < 1e-6f) return;
-        // -toCam so the card's +Z faces the camera (default quad/canvas normal).
         transform.rotation = Quaternion.LookRotation(-toCam.normalized, Vector3.up);
     }
 
@@ -238,8 +181,6 @@ public class CaptureControlCard : MonoBehaviour
         return true;
     }
 
-    // Mirrors VRTemplate/Scripts/HandSubsystemManager and our HandPoseRecognizer:
-    // walk all subsystems, prefer one that is currently running.
     static List<XRHandSubsystem> s_subs;
     static bool TryGetHandSubsystem(out XRHandSubsystem sub)
     {

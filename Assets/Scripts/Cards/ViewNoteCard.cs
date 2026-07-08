@@ -3,18 +3,10 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-/*
-ViewNoteCard
-
-Displays a saved note alongside Edit / Delete / Close buttons. NoteManager
-swaps this for a SaveNoteCard (prefilled) on Edit, destroys the note on
-Delete, or just dismisses on Close.
-*/
 public class ViewNoteCard : MonoBehaviour
 {
-    [Header("Refs (assign in prefab)")]
+    [Header("Refs")]
     public TMP_Text objectNameLabel;
-    [Tooltip("Required. Displays the saved note text (read-only).")]
     public TMP_Text noteTextDisplay;
     public Button editButton;
     public Button deleteButton;

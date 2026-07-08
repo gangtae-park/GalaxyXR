@@ -650,7 +650,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 600, y: 2}
+  m_SizeDelta: {x: 450, y: 200}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!223 &4079084445517476576
 Canvas:
@@ -914,6 +914,7 @@ MonoBehaviour:
   canvasRect: {fileID: 0}
   extraHeightPerRow: 0
   autoDestroySeconds: 30
+  logHeightCalculations: 0
 --- !u!1 &2178477417420288219
 GameObject:
   m_ObjectHideFlags: 0
@@ -1932,5 +1933,5 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 600, y: 30, z: 5}
+  m_Size: {x: 450, y: 30, z: 5}
   m_Center: {x: 0, y: 0, z: 0}

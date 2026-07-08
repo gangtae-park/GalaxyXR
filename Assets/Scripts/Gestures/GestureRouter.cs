@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 
 /*
 Single component that drives the unified gesture pipeline.
@@ -25,6 +28,10 @@ public class GestureRouter : MonoBehaviour
     [Header("Pinch trigger (right-hand)")]
     public InputActionReference pinchAction;
     [Range(0f, 1f)] public float pinchValueThreshold = 0.9f;
+    [Tooltip("Skip gesture start when the right-hand pinch is aimed at ANY interactive element: UI (card buttons, drag handles) OR 3D XR interactables (anchor pins, sticky notes). Prevents these pinches from being mis-detected as new gestures.")]
+    public bool suppressGestureWhenPinchOverUI = true;
+    [Tooltip("Log every suppression so you can verify the guard is firing correctly during dogfooding. Includes which subsystem (UI vs XR interactable) blocked the pinch.")]
+    public bool logUiSuppression = true;
 
     [Header("References")]
     public HandFeatureSource featureSource;
@@ -160,6 +167,29 @@ public class GestureRouter : MonoBehaviour
         {
             if (rightPressed && !_wasPressed && !capturing)
             {
+                // Gate the rising edge so a pinch aimed at a card button, an
+                // anchor pin, or a sticky note doesn't kick off a phantom
+                // gesture. Two pipelines to consult:
+                //   * UI: EventSystem's tracked-device pointer state (cards).
+                //   * XR: XRInteractionManager hover state (anchor pin +
+                //     StickyNote both use XRSimpleInteractable, which routes
+                //     hover through the interaction manager -- NOT
+                //     EventSystem -- so the UI check alone missed them).
+                if (suppressGestureWhenPinchOverUI)
+                {
+                    string blockedBy = null;
+                    if (IsPinchOverUi()) blockedBy = "UI";
+                    else if (IsPinchOverXrInteractable()) blockedBy = "XR interactable";
+                    if (blockedBy != null)
+                    {
+                        if (logUiSuppression)
+                            Debug.Log($"[GestureRouter] pinch rising edge suppressed -- aimed at {blockedBy}");
+                        // Freeze the edge state so the release doesn't fire either.
+                        _wasPressed = rightPressed;
+                        _leftWasPressed = leftPressed;
+                        return;
+                    }
+                }
                 if (savePending) InterruptSave();
                 if (cameraPending) InterruptCapture();
                 StartCapture();
@@ -468,6 +498,67 @@ public class GestureRouter : MonoBehaviour
         Debug.Log($"[Study Log][GestureRouter] {captureGestureName} interrupted by right pinch (handing over to Jackknife)");
         SendEvent(captureGestureName, "FAIL");
         try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
+    }
+
+    // Cached XRInteractionManager reference + scratch list for the XR hover
+    // check. We look up the manager lazily so scene load ordering doesn't
+    // matter, and re-fetch if the cached one goes null (scene reload).
+    private XRInteractionManager _xrManager;
+    private readonly List<IXRInteractor> _xrInteractorScratch = new List<IXRInteractor>();
+
+    // Returns true when the pinch rising edge is aimed at an XR interactable
+    // (anchor pin, sticky note, XR grab handle). Uses XRInteractionManager's
+    // hover state -- both AnchorPin and StickyNote use XRSimpleInteractable
+    // with allowGazeInteraction=false, so only HAND ray/direct interactors
+    // ever satisfy this check (gaze doesn't register hover on them).
+    bool IsPinchOverXrInteractable()
+    {
+        if (_xrManager == null)
+            _xrManager = FindObjectOfType<XRInteractionManager>();
+        if (_xrManager == null) return false;
+
+        _xrInteractorScratch.Clear();
+        _xrManager.GetRegisteredInteractors(_xrInteractorScratch);
+        for (int i = 0; i < _xrInteractorScratch.Count; i++)
+        {
+            if (_xrInteractorScratch[i] is IXRHoverInteractor hover && hover.hasHover)
+                return true;
+        }
+        return false;
+    }
+
+    // Returns true when SOME pointer registered with EventSystem is currently
+    // over a UI raycast target. The Input System UI Input Module keeps a
+    // separate pointer state per tracked device (right hand pinch, left hand
+    // pinch, mouse, etc.), so we probe several candidate ids:
+    //   -1              => default pointer (mouse / older fallback)
+    //   0..3            => touch / tracked device slots the input module
+    //                      typically assigns
+    // If any of them has a hovered UI target we treat the incoming pinch as
+    // a UI interaction and let ExecuteEvents deliver the click through the
+    // normal EventSystem pipeline instead of turning it into a gesture.
+    bool IsPinchOverUi()
+    {
+        EventSystem es = EventSystem.current;
+        if (es == null) return false;
+
+        // Cheap path: the parameterless overload checks the most recently
+        // updated pointer. When the user is aiming at a button, that's the
+        // right-hand tracked device -- so this handles the common case in
+        // one call without allocating.
+        if (es.IsPointerOverGameObject())
+            return true;
+
+        // Belt-and-braces: scan the low pointer ids that the Input System UI
+        // Input Module assigns to tracked / touch devices. Cheap: each call
+        // is a dict lookup. Range picked wide enough to cover both hands +
+        // any secondary device without over-scanning.
+        for (int id = -1; id <= 8; id++)
+        {
+            if (id == 0) continue; // 0 is unassigned in the input module
+            if (es.IsPointerOverGameObject(id)) return true;
+        }
+        return false;
     }
 
     bool ReadPressed(InputActionReference actionRef)

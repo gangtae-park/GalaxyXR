@@ -8,16 +8,14 @@ using UnityEngine.XR.Interaction.Toolkit.Interactables;
 public class AnchorPin : MonoBehaviour
 {
     [Header("Long-pinch to delete")]
-    public float holdToDeleteDuration = 2f;
+    public float holdToDeleteDuration = 1f;
     public bool shrinkWhileHolding = true;
-    public float shrinkRatio = 0.8f;
+    public float shrinkRatio = 0.5f;
     public float autoColliderSizeMultiplier = 1.2f;
 
     [Header("Pinch color feedback")]
-    [Tooltip("Darken the pin while it is being pinched, as feedback.")]
     public bool darkenWhileHolding = true;
-    [Tooltip("RGB brightness at full hold (0 = black, 1 = unchanged). Lower = deeper/darker.")]
-    [Range(0f, 1f)] public float darkenFactor = 0.4f;
+    [Range(0f, 1f)] public float darkenFactor = 0.2f;
 
     public string ObjectName { get; private set; }
 
@@ -25,8 +23,6 @@ public class AnchorPin : MonoBehaviour
     private Coroutine _holdRoutine;
     private Vector3 _initialScale;
 
-    // Per-instance material colors captured at spawn, so the pinch tint only
-    // affects this pin and can be restored when released.
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor"); // URP/Lit
     private static readonly int ColorId = Shader.PropertyToID("_Color");         // built-in / legacy
     private struct MatColor { public Material mat; public int prop; public Color baseColor; }
@@ -73,7 +69,6 @@ public class AnchorPin : MonoBehaviour
 
     private void OnSelectExited(SelectExitEventArgs args)
     {
-        // Released before the hold completed -> cancel and restore.
         CancelHold();
         transform.localScale = _initialScale;
         RestoreColors();

@@ -39,6 +39,11 @@ public class VlmResultReceiver : MonoBehaviour
         public string raw;
         public string finish_reason;
         public string refusal;
+        // Voice Save shortcut: when Python's voice classifier extracts a note
+        // body from the transcript (e.g. "3시 회의라고 저장해줘"), it forwards
+        // the body here so NoteManager can commit a StickyNote directly and
+        // skip the SaveNoteCard input UI. Empty for gesture Save.
+        public string note_text;
         // Compare-specific: when the gesture is "Compare", these carry the two
         // object names and the per-category table that CompareResultCard renders.
         public string name_a;

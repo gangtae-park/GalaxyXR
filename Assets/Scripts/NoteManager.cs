@@ -89,6 +89,47 @@ public class NoteManager : MonoBehaviour
         SpawnSaveCard(objectId, objectName, "", worldPos, rot);
     }
 
+    /// <summary>Voice Save shortcut: skip the SaveNoteCard input UI and
+    /// commit a new note straight to a StickyNote. Used when Python's voice
+    /// classifier already extracted the note body from the transcript
+    /// (e.g. "~~라고 노트 저장해줘"). Matches the "new note" branch of
+    /// HandleSaveCommitted so the resulting Note record + StickyNote are
+    /// indistinguishable from ones the user typed manually.</summary>
+    public void CommitNoteDirectly(string objectId, string objectName, string text,
+                                   Vector3 worldPos, Quaternion rot)
+    {
+        if (stickyNotePrefab == null)
+        {
+            Debug.LogWarning("[NoteManager] stickyNotePrefab not assigned; cannot commit voice note.");
+            return;
+        }
+
+        // A voice Save arriving mid-edit replaces the open card, same policy
+        // as BeginNote uses -- otherwise the user could end up with a hidden
+        // sticky note the surrounding UI has no handle on.
+        if (_openCard != null)
+        {
+            RestoreHiddenSticky();
+            CloseOpenCard();
+        }
+        _editingNote = null;
+
+        Note note = new Note
+        {
+            id = Guid.NewGuid().ToString("N").Substring(0, 8),
+            objectId = objectId ?? "",
+            objectName = objectName ?? "",
+            text = text ?? "",
+            worldPos = worldPos,
+        };
+        note.stickyInstance = SpawnSticky(note, worldPos, rot);
+        _notes.Add(note);
+        if (verboseLogging)
+            Debug.Log(
+                $"[NoteManager] voice note {note.id} committed on '{note.objectName}' " +
+                $"(len={note.text.Length}, total {_notes.Count}).");
+    }
+
     // ---------- SaveNoteCard ----------
 
     void SpawnSaveCard(string objectId, string objectName, string existingText, Vector3 pos, Quaternion rot, bool overwriteExisting = false)

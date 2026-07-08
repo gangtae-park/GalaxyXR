@@ -3,28 +3,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-/*
-CompareResultCard
-
-Drives the CompareResultCard prefab:
-
-  CompareResultCard           <- canvasRect (height grows with row count)
-   └ Panel                    <- rowsContainer (VerticalLayoutGroup parent)
-      ├ TitleRow
-      │   ├ TitleText_1       <- titleText_1   (object 1's name)
-      │   ├ vs
-      │   └ TitleText_2       <- titleText_2   (object 2's name)
-      ├ EmptyRow              (a small spacer; stays in place)
-      └ CategoryRow           <- categoryRowTemplate  (CLONED per category)
-          ├ Category          <- row.categoryText
-          ├ BodyText_1        <- row.bodyText_1
-          └ BodyText_2        <- row.bodyText_2
-
-The template `CategoryRow` is reused as the FIRST visible row and cloned
-(N - 1) times for subsequent rows. The card root's height is recalculated to
-fit (auto-adjust on row count).
-*/
-
 public class CompareResultCard : MonoBehaviour
 {
     [Header("Title")]
@@ -32,18 +10,14 @@ public class CompareResultCard : MonoBehaviour
     public TMP_Text titleText_2;
 
     [Header("Rows")]
-    [Tooltip("The CategoryRow already inside the prefab. Used as the first row AND as the template for additional rows.")]
     public CategoryRowRefs categoryRowTemplate;
-    [Tooltip("Container that holds the rows (typically Panel). If empty, uses the template's parent at runtime.")]
     public RectTransform rowsContainer;
 
     [Header("Close")]
     public Button closeButton;
 
     [Header("Sizing")]
-    [Tooltip("Root RectTransform whose height is recomputed when rows change. If empty, uses this GameObject's RectTransform.")]
     public RectTransform canvasRect;
-    [Tooltip("Extra height (m or px in the canvas's units) added per row beyond the first. Use this to fine-tune in inspector if rows look cramped or too spaced.")]
     public float extraHeightPerRow = 0f;
 
     [Header("Lifetime")]
@@ -52,17 +26,18 @@ public class CompareResultCard : MonoBehaviour
     [System.Serializable]
     public class CategoryRowRefs
     {
-        public GameObject root;       // the CategoryRow GameObject itself
-        public TMP_Text categoryText; // Category
-        public TMP_Text bodyText_1;   // BodyText_1
-        public TMP_Text bodyText_2;   // BodyText_2
+        public GameObject root;
+        public TMP_Text categoryText;
+        public TMP_Text bodyText_1;
+        public TMP_Text bodyText_2;
     }
 
     readonly List<GameObject> _spawnedRows = new List<GameObject>();
-    float _baseHeight;     // height before any rows are added beyond the template
-    float _templateRowHeight;
-    float _layoutSpacing;
+
+    float _baseChromeHeight;
     bool _measured;
+
+    [SerializeField] bool logHeightCalculations = false;
 
     float _destroyAt;
 
@@ -85,8 +60,6 @@ public class CompareResultCard : MonoBehaviour
 
     public void Close() { Destroy(gameObject); }
 
-    /// <summary>Fill the card. Pass the two object names and one entry per
-    /// category. Resizes the card height to fit the number of rows.</summary>
     public void SetContent(string nameA, string nameB, IList<VlmResultReceiver.CompareRow> rows)
     {
         if (titleText_1 != null) titleText_1.text = string.IsNullOrEmpty(nameA) ? "" : nameA;
@@ -110,7 +83,6 @@ public class CompareResultCard : MonoBehaviour
             return;
         }
 
-        // Reuse the template as row 0, then clone for rows 1..N-1.
         FillRow(categoryRowTemplate.root, categoryRowTemplate, rows[0]);
         categoryRowTemplate.root.SetActive(true);
 
@@ -127,6 +99,13 @@ public class CompareResultCard : MonoBehaviour
         ApplyHeight(n);
     }
 
+    public void RefreshHeight()
+    {
+        ApplyHeight(_spawnedRows.Count + (categoryRowTemplate != null
+            && categoryRowTemplate.root != null
+            && categoryRowTemplate.root.activeSelf ? 1 : 0));
+    }
+
     void ResolveContainer()
     {
         if (rowsContainer == null && categoryRowTemplate != null && categoryRowTemplate.root != null)
@@ -136,17 +115,17 @@ public class CompareResultCard : MonoBehaviour
     void EnsureMeasured()
     {
         if (_measured) return;
-        if (canvasRect != null) _baseHeight = canvasRect.rect.height;
-        if (categoryRowTemplate != null && categoryRowTemplate.root != null)
+        if (canvasRect == null || rowsContainer == null)
         {
-            RectTransform rt = categoryRowTemplate.root.transform as RectTransform;
-            if (rt != null) _templateRowHeight = rt.rect.height;
+            _measured = true;
+            return;
         }
-        if (rowsContainer != null)
-        {
-            VerticalLayoutGroup vlg = rowsContainer.GetComponent<VerticalLayoutGroup>();
-            if (vlg != null) _layoutSpacing = vlg.spacing;
-        }
+
+        LayoutRebuilder.ForceRebuildLayoutImmediate(canvasRect);
+
+        float canvasHeight = canvasRect.rect.height;
+        float rowsHeight = rowsContainer.rect.height;
+        _baseChromeHeight = Mathf.Max(0f, canvasHeight - rowsHeight);
         _measured = true;
     }
 
@@ -165,9 +144,6 @@ public class CompareResultCard : MonoBehaviour
         if (refs.bodyText_2   != null) refs.bodyText_2.text   = data.value_b  ?? "";
     }
 
-    // For cloned rows, find the three TMP texts by name inside the clone.
-    // The names ("Category", "BodyText_1", "BodyText_2") come from the prefab
-    // hierarchy and must stay in sync with it.
     static CategoryRowRefs BindRowFromClone(GameObject clone)
     {
         CategoryRowRefs r = new CategoryRowRefs { root = clone };
@@ -184,12 +160,28 @@ public class CompareResultCard : MonoBehaviour
 
     void ApplyHeight(int rowCount)
     {
-        if (canvasRect == null) return;
-        // Each row beyond the first adds (templateRowHeight + layoutSpacing + extraHeightPerRow).
-        int extraRows = Mathf.Max(0, rowCount - 1);
-        float added = extraRows * (_templateRowHeight + _layoutSpacing + extraHeightPerRow);
+        if (canvasRect == null || rowsContainer == null) return;
+
+        LayoutRebuilder.ForceRebuildLayoutImmediate(rowsContainer);
+        float requiredRowsHeight = LayoutUtility.GetPreferredHeight(rowsContainer);
+        if (requiredRowsHeight <= 0f)
+            requiredRowsHeight = rowsContainer.rect.height;
+
+        if (extraHeightPerRow != 0f)
+            requiredRowsHeight += Mathf.Max(0, rowCount) * extraHeightPerRow;
+
+        float target = _baseChromeHeight + requiredRowsHeight;
         Vector2 sd = canvasRect.sizeDelta;
-        sd.y = _baseHeight + added;
+        float previous = sd.y;
+        sd.y = target;
         canvasRect.sizeDelta = sd;
+
+        LayoutRebuilder.ForceRebuildLayoutImmediate(canvasRect);
+
+        if (logHeightCalculations)
+            Debug.Log(
+                $"[CompareResultCard] ApplyHeight rows={rowCount} " +
+                $"required_rows={requiredRowsHeight:F1} chrome={_baseChromeHeight:F1} " +
+                $"canvas {previous:F1} -> {target:F1}");
     }
 }
