@@ -24,6 +24,21 @@ every Evaluate() returns one of:
                 -- the thumbs are anti-parallel and the indexes are anti-parallel.
                 This is a snapshot only; the 2-second hold required for Capture
                 RECOGNIZED is enforced by GestureRouter, not here.
+  TranslateStart : RIGHT hand C-shape. Thumb + index are checked with SEPARATE
+                extension bounds because a natural C has an extended thumb but a
+                CURVED index (that curve is what makes the C-cup). Concretely:
+                thumb ext >= translateThumbMinExtension (straight thumb OK),
+                index ext in [translateIndexMinExtension, translateIndexMaxExtension]
+                (must be curled -- a fully straight index is Pointing, not C).
+                Middle/ring/little curled, tips >= translateThumbIndexGapMin
+                apart, palm oriented toward the user's LEFT (mirrored C). Left
+                hand unconstrained.
+  TranslateEnd  : IDENTICAL base checks as TranslateStart -- extension, curl,
+                orientation -- EXCEPT the thumb-index tip distance has fallen
+                BELOW translateThumbIndexGapMin (the C is now closed). Only the
+                gap distinguishes the two states, so a smooth closing motion
+                transitions cleanly Start -> End without ever passing through
+                None. GestureRouter treats End as the RECOGNIZED trigger.
 
 GestureRouter is the polling driver; this component is stateless about the
 gesture lifecycle (START/END/FAIL is the router's job). The only state we keep
@@ -31,7 +46,7 @@ internally is the small ring of recent right-index-tip lateral samples needed
 to count scribble reversals.
 */
 
-public enum HandPoseKind { None, SaveEntry, Save, CapturePose }
+public enum HandPoseKind { None, SaveEntry, Save, CapturePose, TranslateStart, TranslateEnd }
 
 public class HandPoseRecognizer : MonoBehaviour
 {
@@ -54,6 +69,22 @@ public class HandPoseRecognizer : MonoBehaviour
     [Range(0f, 1f)] public float thumbIndexPerpDot = 0.7f;
     [Range(-1f, 0f)] public float handsAntiParallelDot = -0.5f;
 
+    [Header("Translate pose (right hand C-shape)")]
+    [Tooltip("Minimum tip-to-tip distance between right thumb and right index for the OPEN C-shape (TranslateStart) to count. Sits above the natural pinch resting distance so a closed pinch pose doesn't false-start Translate.")]
+    public float translateThumbIndexGapMin = 0.04f;
+    [Tooltip("Middle/ring/little fingers must be at or below this extension ratio to distinguish the C from an open hand.")]
+    [Range(0f, 1f)] public float translateOtherCurledRatio = 0.7f;
+    [Tooltip("Minimum extension ratio required for the RIGHT thumb to count as a C-shape side. No upper cap -- a fully-straight thumb is expected in a natural C. Raise if a curled thumb keeps triggering C by mistake.")]
+    [Range(0f, 1f)] public float translateThumbMinExtension = 0.70f;
+    [Tooltip("Minimum extension ratio for the RIGHT index. Guards against a fully curled index (fist-like). Should sit clearly BELOW translateIndexMaxExtension so the index has a valid 'curved' window.")]
+    [Range(0f, 1f)] public float translateIndexMinExtension = 0.55f;
+    [Tooltip("MAXIMUM extension ratio for the RIGHT index. This is the KEY differentiator from Pointing: a pointing index is nearly straight (~0.95) and gets rejected once it goes above this cap; a C-shape index is visibly curved (~0.65-0.85). Lower this to be stricter against straight fingers, raise if a moderately-curved C keeps being rejected as too straight.")]
+    [Range(0.5f, 1f)] public float translateIndexMaxExtension = 0.88f;
+    [Tooltip("Enforce that the RIGHT palm is oriented so the C opens toward the user's LEFT (mirrored C). Uncheck to accept any wrist rotation. Keep on to reject C-shapes that face the wrong way and to add one more filter against non-Translate poses.")]
+    public bool translateStartRequireOrientation = true;
+    [Tooltip("How strongly the right palm must face the user's LEFT. Higher = stricter (0.7 accepts only near-perfect left-facing); lower = looser (0.2 accepts almost any leftward tilt). Uses the same palm-normal convention as the Save pose (palm.rotation * (0,-1,0) points OUT of the palm surface). The palm normal and camera-right are BOTH projected onto the horizontal plane before dotting, so head yaw rotates the reference cleanly with the head and head pitch/roll don't leak into the score. Recommended range 0.3-0.6.")]
+    [Range(-1f, 1f)] public float translateStartPalmFacingLeftDot = 0.4f;
+
     [Header("Status (read-only)")]
     [SerializeField] private HandPoseKind lastResult;
     [SerializeField] private bool leftHandTracked;
@@ -74,6 +105,12 @@ public class HandPoseRecognizer : MonoBehaviour
     [SerializeField] private float rThumbIndexDot = 1f;
     [SerializeField] private string lLShapeReject = "";
     [SerializeField] private string rLShapeReject = "";
+    [SerializeField] private bool translateCShape;
+    [SerializeField] private float translateThumbIndexGap = -1f;
+    [SerializeField] private float translateThumbExt = -1f;
+    [SerializeField] private float translateIndexExt = -1f;
+    [SerializeField] private float translatePalmDot = -2f;
+    [SerializeField] private string translateReject = "";
 
     [Header("Debug")]
     public bool verboseLogging = false;
@@ -113,6 +150,16 @@ public class HandPoseRecognizer : MonoBehaviour
         // {Capture} pose check
         if (IsCapturePose(left, right))
             return Reset(HandPoseKind.CapturePose);
+
+        // {Translate} pose check -- right-hand "C" (open or closed). Left hand
+        // is not constrained, so this must be checked BEFORE Save (which
+        // requires a specific left-hand posture but leaves the right free --
+        // ambiguous if both would match). EvaluateTranslatePose returns
+        // TranslateStart (gap >= min), TranslateEnd (gap < min, same base
+        // checks otherwise), or None (base checks fail).
+        HandPoseKind translateKind = EvaluateTranslatePose(right);
+        if (translateKind != HandPoseKind.None)
+            return Reset(translateKind);
 
         // {Save} pose check
         // 1) left palm fully open + facing the user camera
@@ -189,14 +236,15 @@ public class HandPoseRecognizer : MonoBehaviour
         {
             Debug.Log(
                 $"[HandPoseRecognizer] kind={lastResult}" +
-                $" | tracked L={leftHandTracked} R={rightHandTracked}" +
-                $" | L T={lThumb:F2} I={lIndex:F2} M={lMiddle:F2} R={lRing:F2} L={lLittle:F2}" +
-                $" | R T={rThumb:F2} I={rIndex:F2} M={rMiddle:F2} R={rRing:F2} L={rLittle:F2}" +
+                // $" | tracked L={leftHandTracked} R={rightHandTracked}" +
+                // $" | L T={lThumb:F2} I={lIndex:F2} M={lMiddle:F2} R={lRing:F2} L={lLittle:F2}" +
+                // $" | R T={rThumb:F2} I={rIndex:F2} M={rMiddle:F2} R={rRing:F2} L={rLittle:F2}" +
                 // $" (extended >= {fingerExtendedRatio:F2}, curled <= {fingerCurledRatio:F2}; 0.00 = joints not tracked)" +
-                $" | leftPalmOpen={leftPalmOpen} facingCamera={leftPalmFacingCamera} ({palmFacingCameraDot:F2})" +
-                $" | leftL={cameraLeftLShape}({lLShapeReject}) rightL={cameraRightLShape}({rLShapeReject})" +
-                $" L={lThumbIndexDot:F2} R={rThumbIndexDot:F2}" +
-                $" | thumbsDot={cameraThumbsDot:F2} indexesDot={cameraIndexesDot:F2}"
+                // $" | leftPalmOpen={leftPalmOpen} facingCamera={leftPalmFacingCamera} ({palmFacingCameraDot:F2})" +
+                // $" | leftL={cameraLeftLShape}({lLShapeReject}) rightL={cameraRightLShape}({rLShapeReject})" +
+                // $" L={lThumbIndexDot:F2} R={rThumbIndexDot:F2}" +
+                // $" | thumbsDot={cameraThumbsDot:F2} indexesDot={cameraIndexesDot:F2}" +
+                $" | translateC={translateCShape}({translateReject}) gap={translateThumbIndexGap:F3} thumbExt={translateThumbExt:F2} indexExt={translateIndexExt:F2} palmDot={translatePalmDot:F2}"
             );
         }
         return k;
@@ -216,6 +264,11 @@ public class HandPoseRecognizer : MonoBehaviour
             cameraThumbsDot = 1f;
             cameraIndexesDot = 1f;
         }
+        if (k != HandPoseKind.TranslateStart && k != HandPoseKind.TranslateEnd)
+        {
+            translateCShape = false;
+            translateThumbIndexGap = -1f;
+        }
         return Stamp(k);
     }
 
@@ -234,6 +287,31 @@ public class HandPoseRecognizer : MonoBehaviour
         if (headCamera != null) return headCamera.position;
         if (_resolvedCamera == null) _resolvedCamera = Camera.main;
         return _resolvedCamera != null ? _resolvedCamera.transform.position : Vector3.zero;
+    }
+
+    // Head's right axis for the mirrored-C orientation check. Tracks head
+    // rotation each frame -- the reference "left" rotates with the user, so
+    // a C-shape held on the current head-relative left always passes. The
+    // palm-vs-reference comparison is performed on the horizontal plane in
+    // EvaluateTranslatePose so pitch/roll wobble doesn't leak into palmDot.
+    Vector3 ResolveReferenceRight()
+    {
+        Transform src = headCamera;
+        if (src == null)
+        {
+            if (_resolvedCamera == null) _resolvedCamera = Camera.main;
+            if (_resolvedCamera != null) src = _resolvedCamera.transform;
+        }
+        return src != null ? src.right : Vector3.right;
+    }
+
+    // Zero the Y component and re-normalize so tilt/roll noise disappears from
+    // orientation dot products. If the input is nearly vertical (no horizontal
+    // component) we return Vector3.zero -- callers must treat that as ambiguous.
+    static Vector3 FlattenHorizontal(Vector3 v)
+    {
+        v.y = 0f;
+        return v.sqrMagnitude < 1e-6f ? Vector3.zero : v.normalized;
     }
 
     void SnapshotFingerRatios(XRHand hand)
@@ -323,6 +401,89 @@ public class HandPoseRecognizer : MonoBehaviour
 
         if (isLeft) lLShapeReject = "OK"; else rLShapeReject = "OK";
         return true;
+    }
+
+    // Right-hand "mirrored C": thumb extended (straight is fine), index curved
+    // (must NOT be straight -- that's the key discriminator from Pointing),
+    // remaining fingers curled, palm oriented so the C opens toward the user's
+    // LEFT. Base checks (extension, curl, orientation) are IDENTICAL for Start
+    // and End; only the thumb-index tip gap decides which one:
+    //   gap >= translateThumbIndexGapMin -> TranslateStart (C is open)
+    //   gap <  translateThumbIndexGapMin -> TranslateEnd   (C has closed)
+    // Any base failure -> None (the router treats this as cancel).
+    HandPoseKind EvaluateTranslatePose(XRHand right)
+    {
+        translateCShape = false;
+        translateThumbIndexGap = -1f;
+        translateThumbExt = -1f;
+        translateIndexExt = -1f;
+        translatePalmDot = -2f;
+        translateReject = "";
+
+        // Thumb: extended, no upper cap (a fully-straight thumb is expected).
+        float thumbExt = ThumbExtensionRatio(right);
+        translateThumbExt = thumbExt;
+        if (thumbExt < translateThumbMinExtension)
+        { translateReject = $"thumb not extended ({thumbExt:F2} < {translateThumbMinExtension:F2})"; return HandPoseKind.None; }
+
+        // Index: MUST be curved. Both min (rejects a fully-curled fist) and
+        // max (rejects a straight Pointing index) are enforced.
+        float indexExt = FingerExtensionRatio(right, XRHandJointID.IndexMetacarpal, XRHandJointID.IndexProximal,
+            XRHandJointID.IndexIntermediate, XRHandJointID.IndexDistal, XRHandJointID.IndexTip);
+        translateIndexExt = indexExt;
+        if (indexExt < translateIndexMinExtension)
+        { translateReject = $"index too curled ({indexExt:F2} < {translateIndexMinExtension:F2})"; return HandPoseKind.None; }
+        if (indexExt > translateIndexMaxExtension)
+        { translateReject = $"index too straight ({indexExt:F2} > {translateIndexMaxExtension:F2}) -- looks like pointing"; return HandPoseKind.None; }
+
+        if (FingerExtensionRatio(right, XRHandJointID.MiddleMetacarpal, XRHandJointID.MiddleProximal,
+            XRHandJointID.MiddleIntermediate, XRHandJointID.MiddleDistal, XRHandJointID.MiddleTip) > translateOtherCurledRatio)
+        { translateReject = "middle not curled"; return HandPoseKind.None; }
+        if (FingerExtensionRatio(right, XRHandJointID.RingMetacarpal, XRHandJointID.RingProximal,
+            XRHandJointID.RingIntermediate, XRHandJointID.RingDistal, XRHandJointID.RingTip) > translateOtherCurledRatio)
+        { translateReject = "ring not curled"; return HandPoseKind.None; }
+        if (FingerExtensionRatio(right, XRHandJointID.LittleMetacarpal, XRHandJointID.LittleProximal,
+            XRHandJointID.LittleIntermediate, XRHandJointID.LittleDistal, XRHandJointID.LittleTip) > translateOtherCurledRatio)
+        { translateReject = "little not curled"; return HandPoseKind.None; }
+
+        if (!TryGetPos(right, XRHandJointID.ThumbTip, out Vector3 thumbTip) ||
+            !TryGetPos(right, XRHandJointID.IndexTip, out Vector3 indexTip))
+        { translateReject = "thumb/index tip not tracked"; return HandPoseKind.None; }
+
+        translateThumbIndexGap = Vector3.Distance(thumbTip, indexTip);
+
+        // Orientation: for a mirrored C on the RIGHT hand, the palm faces the
+        // user's LEFT. We reuse the Save convention: palm.rotation * (0,-1,0)
+        // is the "out of palm surface" direction. To make the dot stable across
+        // head yaw, BOTH the palm normal and the camera-right axis are
+        // projected onto the horizontal plane before dotting. Applies equally
+        // to Start and End -- if the user rotates the hand during closing,
+        // the pose invalidates and translatePending will cancel.
+        if (translateStartRequireOrientation)
+        {
+            if (!right.GetJoint(XRHandJointID.Palm).TryGetPose(out Pose palmPose))
+            { translateReject = "palm joint not tracked"; return HandPoseKind.None; }
+            Vector3 palmNormal = palmPose.rotation * new Vector3(0f, -1f, 0f);
+
+            Vector3 palmH = FlattenHorizontal(palmNormal);
+            Vector3 refRightH = FlattenHorizontal(ResolveReferenceRight());
+            if (palmH == Vector3.zero || refRightH == Vector3.zero)
+            { translateReject = "orientation nearly vertical -- can't project to horizontal"; return HandPoseKind.None; }
+
+            translatePalmDot = Vector3.Dot(palmH, -refRightH);
+            if (translatePalmDot < translateStartPalmFacingLeftDot)
+            { translateReject = $"palm not facing left ({translatePalmDot:F2} < {translateStartPalmFacingLeftDot:F2})"; return HandPoseKind.None; }
+        }
+
+        // Base OK -- decide Start vs End on the gap alone.
+        translateCShape = true;
+        if (translateThumbIndexGap < translateThumbIndexGapMin)
+        {
+            translateReject = "OK(End)";
+            return HandPoseKind.TranslateEnd;
+        }
+        translateReject = "OK(Start)";
+        return HandPoseKind.TranslateStart;
     }
 
     static Vector3 FingerDirection(XRHand hand, XRHandJointID baseJoint, XRHandJointID tipJoint)

@@ -18,6 +18,8 @@ public class CaptureManager : MonoBehaviour
 {
     [Header("Refs")]
     public Camera referenceCamera;
+    [Tooltip("Assign the same GestureRouter used elsewhere. While the CaptureControlCard is open we call SetPinchSuppressed(true) on it so the shutter pinch does NOT double-fire as a Jackknife gesture trigger.")]
+    public GestureRouter gestureRouter;
 
     [Header("Prefab")]
     public GameObject captureControlCardPrefab;
@@ -75,6 +77,13 @@ public class CaptureManager : MonoBehaviour
         card.OnTimedOut     += () => HandleClose(card, "timeout");
         _activeCard = card;
 
+        // From this moment until HandleClose the shutter card owns the pinch
+        // action -- one or both hands' pinches fire the shutter. Gate off
+        // GestureRouter's Jackknife rising-edge check for the same window so a
+        // single pinch never means both "take a shot" and "start a Jackknife
+        // gesture".
+        if (gestureRouter != null) gestureRouter.SetPinchSuppressed(true, "capture_shutter");
+
         if (verboseLogging)
             Debug.Log($"[CaptureManager] CaptureControlCard opened for '{objectName}' id={objectId} initSize={initialSize}");
     }
@@ -85,6 +94,7 @@ public class CaptureManager : MonoBehaviour
         if (verboseLogging) Debug.Log($"[CaptureManager] capture closed ({reason}).");
         if (_activeCard == card) _activeCard = null;
         Destroy(card.gameObject);
+        if (gestureRouter != null) gestureRouter.SetPinchSuppressed(false, $"capture_closed_{reason}");
     }
 
     // bbox is in pixel coordinates of the source frame (Python side captured_frame).
