@@ -127,13 +127,23 @@ public class ResultCardSpawner : MonoBehaviour
 
     void OnEnable()
     {
-        if (receiver != null) receiver.OnResult += HandleResult;
+        if (receiver != null)
+        {
+            receiver.OnResult += HandleResult;
+            receiver.OnStreamDelta += HandleStreamDelta;
+            receiver.OnStreamEnd += HandleStreamEnd;
+        }
         if (gestureRouter != null) gestureRouter.OnCaptureRecognized += HandleGestureRecognized;
     }
 
     void OnDisable()
     {
-        if (receiver != null) receiver.OnResult -= HandleResult;
+        if (receiver != null)
+        {
+            receiver.OnResult -= HandleResult;
+            receiver.OnStreamDelta -= HandleStreamDelta;
+            receiver.OnStreamEnd -= HandleStreamEnd;
+        }
         if (gestureRouter != null) gestureRouter.OnCaptureRecognized -= HandleGestureRecognized;
     }
 
@@ -792,6 +802,167 @@ public class ResultCardSpawner : MonoBehaviour
         _currentCard = go;
         if (verboseLogging)
             Debug.Log($"[ResultCardSpawner] spawned AskResultCard name='{payload.response.name}'");
+    }
+
+    // ---------- Streaming LLM output (Ask + Translate) ----------
+
+    // Tracks the currently-streaming Ask card so appending deltas doesn't have
+    // to search _currentCard every packet -- and stays consistent even if the
+    // user replaces _currentCard with something else mid-stream (in which case
+    // we just stop appending).
+    private AskResultCard _streamingAskCard;
+    private string _streamingAskStreamId;
+    private string _streamingAskQuestion;
+    private TranslateResultCard _streamingTranslateCard;
+    private string _streamingTranslateStreamId;
+
+    void HandleStreamDelta(VlmResultReceiver.VlmStreamDeltaPayload payload)
+    {
+        if (payload == null || string.IsNullOrEmpty(payload.gesture)) return;
+
+        switch (payload.gesture)
+        {
+            case "Ask":
+                HandleAskStreamDelta(payload);
+                break;
+            case "Translate":
+                HandleTranslateStreamDelta(payload);
+                break;
+        }
+    }
+
+    void HandleStreamEnd(VlmResultReceiver.VlmStreamEndPayload payload)
+    {
+        if (payload == null || string.IsNullOrEmpty(payload.gesture)) return;
+
+        switch (payload.gesture)
+        {
+            case "Ask":
+                HandleAskStreamEnd(payload);
+                break;
+            case "Translate":
+                HandleTranslateStreamEnd(payload);
+                break;
+        }
+    }
+
+    // ---- Ask streaming ----
+    void HandleAskStreamDelta(VlmResultReceiver.VlmStreamDeltaPayload payload)
+    {
+        // First delta of a new stream: replace whichever card is showing (typically
+        // the AskQuestionCard the user just submitted from) with a fresh
+        // AskResultCard at the same world position so streaming visibly starts
+        // right where they were looking.
+        if (_streamingAskCard == null || _streamingAskStreamId != payload.stream_id)
+        {
+            SpawnStreamingAskCard(payload);
+        }
+        if (_streamingAskCard != null)
+            _streamingAskCard.AppendAnswerDelta(payload.delta);
+    }
+
+    void SpawnStreamingAskCard(VlmResultReceiver.VlmStreamDeltaPayload payload)
+    {
+        if (askResultCardPrefab == null)
+        {
+            Debug.LogWarning("[ResultCardSpawner] askResultCardPrefab not assigned; can't stream Ask answer.");
+            return;
+        }
+
+        // Anchor: if the current card is the AskQuestionCard from phase 1, keep
+        // its world position; otherwise fall back to whatever the seq=0
+        // delta's target_meta produces (translated through a synthetic
+        // VlmResultPayload since ComputeCardSpawnPosition expects that shape).
+        Vector3 spawnPos;
+        if (_currentCard != null)
+        {
+            spawnPos = _currentCard.transform.position;
+        }
+        else
+        {
+            var synth = new VlmResultReceiver.VlmResultPayload
+            {
+                gesture = payload.gesture,
+                target_meta = payload.target_meta,
+            };
+            spawnPos = ComputeCardSpawnPosition(synth, CardPlacementPolicy.OffsetUpperRightCloser);
+        }
+
+        // Pull the user's question from the AskQuestionCard if still around.
+        string question =
+            (_pendingAskQuestion != null && !string.IsNullOrEmpty(_pendingAskQuestion.SubmittedQuestion))
+                ? _pendingAskQuestion.SubmittedQuestion
+                : (payload.target_meta != null ? payload.target_meta.user_question : "");
+
+        ReplaceCurrentCard();
+        _pendingAskQuestion = null;
+
+        GameObject go = Instantiate(askResultCardPrefab, spawnPos, Quaternion.identity);
+        ApplyConstantSize(go);
+        _currentCard = go;
+        _streamingAskCard = go.GetComponent<AskResultCard>();
+        _streamingAskStreamId = payload.stream_id;
+        _streamingAskQuestion = question;
+        if (_streamingAskCard != null)
+        {
+            // Object name is filled by the END packet's response; use a
+            // placeholder title until then so the card isn't blank.
+            _streamingAskCard.BeginStreaming("...", question);
+        }
+        if (verboseLogging)
+            Debug.Log($"[ResultCardSpawner] Ask streaming card spawned stream_id={payload.stream_id}");
+    }
+
+    void HandleAskStreamEnd(VlmResultReceiver.VlmStreamEndPayload payload)
+    {
+        if (_streamingAskCard == null || _streamingAskStreamId != payload.stream_id) return;
+
+        string finalAnswer = payload.response != null ? payload.response.answer : "";
+        string title = (payload.response != null && !string.IsNullOrEmpty(payload.response.name))
+            ? payload.response.name
+            : "Unknown";
+        // Reset the title now that we know the real object name.
+        _streamingAskCard.SetContent(title, _streamingAskQuestion, finalAnswer);
+        _streamingAskCard.EndStreaming(finalAnswer);
+        _streamingAskCard = null;
+        _streamingAskStreamId = null;
+        _streamingAskQuestion = null;
+        if (verboseLogging)
+            Debug.Log($"[ResultCardSpawner] Ask stream ended status={payload.status} len={(finalAnswer != null ? finalAnswer.Length : 0)}");
+    }
+
+    // ---- Translate streaming ----
+    void HandleTranslateStreamDelta(VlmResultReceiver.VlmStreamDeltaPayload payload)
+    {
+        // TranslateResultCard is already spawned by the earlier OCR-stage
+        // VLM_RESULT packet, so we mostly just append. The first delta clears
+        // the "번역 중..." placeholder via BeginStreamingTranslation.
+        if (_streamingTranslateCard == null || _streamingTranslateStreamId != payload.stream_id)
+        {
+            var card = _currentCard != null ? _currentCard.GetComponent<TranslateResultCard>() : null;
+            if (card == null)
+            {
+                if (verboseLogging)
+                    Debug.LogWarning("[ResultCardSpawner] Translate stream delta arrived but no TranslateResultCard is showing; the OCR-stage packet may have been dropped.");
+                return;
+            }
+            _streamingTranslateCard = card;
+            _streamingTranslateStreamId = payload.stream_id;
+            _streamingTranslateCard.BeginStreamingTranslation();
+        }
+        _streamingTranslateCard.AppendTranslationDelta(payload.delta);
+    }
+
+    void HandleTranslateStreamEnd(VlmResultReceiver.VlmStreamEndPayload payload)
+    {
+        if (_streamingTranslateCard == null || _streamingTranslateStreamId != payload.stream_id) return;
+
+        string finalTranslation = payload.response != null ? payload.response.translation : "";
+        _streamingTranslateCard.EndStreamingTranslation(finalTranslation);
+        _streamingTranslateCard = null;
+        _streamingTranslateStreamId = null;
+        if (verboseLogging)
+            Debug.Log($"[ResultCardSpawner] Translate stream ended status={payload.status} len={(finalTranslation != null ? finalTranslation.Length : 0)}");
     }
 
     // ---------- Generic mapped panels ----------

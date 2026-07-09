@@ -19,11 +19,11 @@ every Evaluate() returns one of:
                 (a "scribble" pattern). The right hand's *pose* (open, pinched,
                 fisted, ...) is intentionally unconstrained -- only the index
                 tip's motion on the palm matters.
-  CapturePose  : BOTH hands form an "L" (thumb + index extended, perpendicular;
-                middle/ring/little curled) AND the two L's interlock to a frame
-                -- the thumbs are anti-parallel and the indexes are anti-parallel.
-                This is a snapshot only; the 2-second hold required for Capture
-                RECOGNIZED is enforced by GestureRouter, not here.
+  CapturePose  : BOTH hands independently form an "L" (thumb + index extended,
+                perpendicular; middle/ring/little curled). No interlock check --
+                users don't need to hold the exact anti-parallel picture-frame
+                pose. This is a snapshot only; the 2-second hold required for
+                Capture RECOGNIZED is enforced by GestureRouter, not here.
   TranslateStart : RIGHT hand C-shape. Thumb + index are checked with SEPARATE
                 extension bounds because a natural C has an extended thumb but a
                 CURVED index (that curve is what makes the C-cup). Concretely:
@@ -67,6 +67,7 @@ public class HandPoseRecognizer : MonoBehaviour
     [Header("Camera pose (Capture)")]
     [Range(0f, 1f)] public float fingerCurledRatio = 0.7f;
     [Range(0f, 1f)] public float thumbIndexPerpDot = 0.7f;
+    [Tooltip("UNUSED. The interlock check (thumbs anti-parallel + indexes anti-parallel) was removed so users don't need to hold the exact picture-frame pose. Kept in the Inspector only for scene-file compatibility; safe to ignore.")]
     [Range(-1f, 0f)] public float handsAntiParallelDot = -0.5f;
 
     [Header("Translate pose (right hand C-shape)")]
@@ -345,6 +346,12 @@ public class HandPoseRecognizer : MonoBehaviour
         return true;
     }
 
+    // Capture is now the simpler two-hand L check: both hands independently
+    // form an L-shape (thumb + index extended and perpendicular, other three
+    // curled). The previous interlock constraint -- thumbs anti-parallel AND
+    // indexes anti-parallel -- was removed so users don't have to hold the
+    // exact "picture frame" pose. cameraThumbsDot / cameraIndexesDot are still
+    // computed for the debug status readout but no longer gate the pose.
     bool IsCapturePose(XRHand left, XRHand right)
     {
         cameraLeftLShape  = IsCameraFrameLShape(left,  out Vector3 leftThumb,  out Vector3 leftIndex);
@@ -353,8 +360,6 @@ public class HandPoseRecognizer : MonoBehaviour
 
         cameraThumbsDot  = Vector3.Dot(leftThumb,  rightThumb);
         cameraIndexesDot = Vector3.Dot(leftIndex,  rightIndex);
-        if (cameraThumbsDot  > handsAntiParallelDot) return false;
-        if (cameraIndexesDot > handsAntiParallelDot) return false;
         return true;
     }
 
@@ -483,6 +488,58 @@ public class HandPoseRecognizer : MonoBehaviour
             return HandPoseKind.TranslateEnd;
         }
         translateReject = "OK(Start)";
+        return HandPoseKind.TranslateStart;
+    }
+
+    // Relaxed variant used by the router ONLY while translatePending is true.
+    // Enter path (EvaluateTranslatePose) still enforces palm-left orientation
+    // and the index max-extension cap so Translate doesn't false-start from a
+    // pointing pose. Once we're committed, the sweep motion often drifts on
+    // those axes -- the palm rotates as the arm moves, the index straightens
+    // slightly as the wrist extends -- and neither should break the gesture.
+    //
+    // What DOES break the hold: middle/ring/little uncurling (hand transitions
+    // to open palm / different pose), or thumb/index dropping below their MIN
+    // extension (fingers curling into a fist / different pose). Everything
+    // else is allowed to wobble.
+    public HandPoseKind EvaluateTranslateHold()
+    {
+        if (_handSubsystem == null && !TryGetHandSubsystem(out _handSubsystem))
+            return HandPoseKind.None;
+        XRHand right = _handSubsystem.rightHand;
+        if (!right.isTracked) return HandPoseKind.None;
+
+        float thumbExt = ThumbExtensionRatio(right);
+        translateThumbExt = thumbExt;
+        if (thumbExt < translateThumbMinExtension) return HandPoseKind.None;
+
+        float indexExt = FingerExtensionRatio(right, XRHandJointID.IndexMetacarpal, XRHandJointID.IndexProximal,
+            XRHandJointID.IndexIntermediate, XRHandJointID.IndexDistal, XRHandJointID.IndexTip);
+        translateIndexExt = indexExt;
+        if (indexExt < translateIndexMinExtension) return HandPoseKind.None;
+
+        if (FingerExtensionRatio(right, XRHandJointID.MiddleMetacarpal, XRHandJointID.MiddleProximal,
+            XRHandJointID.MiddleIntermediate, XRHandJointID.MiddleDistal, XRHandJointID.MiddleTip) > translateOtherCurledRatio)
+            return HandPoseKind.None;
+        if (FingerExtensionRatio(right, XRHandJointID.RingMetacarpal, XRHandJointID.RingProximal,
+            XRHandJointID.RingIntermediate, XRHandJointID.RingDistal, XRHandJointID.RingTip) > translateOtherCurledRatio)
+            return HandPoseKind.None;
+        if (FingerExtensionRatio(right, XRHandJointID.LittleMetacarpal, XRHandJointID.LittleProximal,
+            XRHandJointID.LittleIntermediate, XRHandJointID.LittleDistal, XRHandJointID.LittleTip) > translateOtherCurledRatio)
+            return HandPoseKind.None;
+
+        if (!TryGetPos(right, XRHandJointID.ThumbTip, out Vector3 thumbTip) ||
+            !TryGetPos(right, XRHandJointID.IndexTip, out Vector3 indexTip))
+            return HandPoseKind.None;
+
+        translateThumbIndexGap = Vector3.Distance(thumbTip, indexTip);
+        translateCShape = true;
+        if (translateThumbIndexGap < translateThumbIndexGapMin)
+        {
+            translateReject = "OK(End,hold)";
+            return HandPoseKind.TranslateEnd;
+        }
+        translateReject = "OK(Start,hold)";
         return HandPoseKind.TranslateStart;
     }
 
