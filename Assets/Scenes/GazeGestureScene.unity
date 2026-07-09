@@ -805,7 +805,7 @@ MonoBehaviour:
   translateOtherCurledRatio: 0.5
   translateThumbMinExtension: 0.7
   translateIndexMinExtension: 0.7
-  translateIndexMaxExtension: 0.96
+  translateIndexMaxExtension: 0.995
   translateStartRequireOrientation: 1
   translateStartPalmFacingLeftDot: 0.6
   lastResult: 0

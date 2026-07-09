@@ -86,6 +86,8 @@ public class GestureRouter : MonoBehaviour
     // is gone -- usability trumps the extra confirm.
     public bool verboseCameraHoldLogging = false;
     public float cameraHoldLogIntervalSeconds = 0.5f;
+    [Tooltip("After Translate RECOGNIZED, block the Jackknife pinch rising edge for this many seconds. The finger-close motion that ended Translate also fires the pinch InputAction (thumb touches index), and without this cooldown the same physical action can leak into a phantom Jackknife capture the next frame. 0.3-0.5s is usually enough.")]
+    public float postGestureCooldownSeconds = 0.4f;
 
     [Header("Status (read-only)")]
     [SerializeField] private bool capturing;
@@ -107,6 +109,7 @@ public class GestureRouter : MonoBehaviour
     [SerializeField] private Vector3 translateEndHandPos;
     [SerializeField] private bool pinchSuppressed;
     [SerializeField] private string pinchSuppressReason = "";
+    [SerializeField] private float pinchCooldownUntil;
     [SerializeField] private string lastPoseResult = "";
 
     public bool IsCapturing => capturing;
@@ -209,7 +212,7 @@ public class GestureRouter : MonoBehaviour
         }
         else
         {
-            if (rightPressed && !_wasPressed && !capturing && !translatePending && !pinchSuppressed)
+            if (rightPressed && !_wasPressed && !capturing && !translatePending && !pinchSuppressed && Time.time >= pinchCooldownUntil)
             {
                 // Gate the rising edge so a pinch aimed at a card button, an
                 // anchor pin, or a sticky note doesn't kick off a phantom
@@ -451,6 +454,24 @@ public class GestureRouter : MonoBehaviour
         catch (Exception e) { Debug.LogError($"[GestureRouter] poseRecognizer.Evaluate threw: {e}"); }
         lastPoseResult = kind.ToString();
 
+        // While translatePending is true, retry with the LOOSE hold check
+        // whenever the strict enter check said None. This lets the palm
+        // orientation and the index max-extension drift mid-sweep (which they
+        // naturally do as the arm moves) without breaking the gesture. Only a
+        // real base failure (thumb/index below MIN ext, or middle/ring/little
+        // uncurling) will still surface as None -> cancel.
+        if (translatePending && kind == HandPoseKind.None)
+        {
+            HandPoseKind hold = HandPoseKind.None;
+            try { hold = poseRecognizer.EvaluateTranslateHold(); }
+            catch (Exception e) { Debug.LogError($"[GestureRouter] EvaluateTranslateHold threw: {e}"); }
+            if (hold == HandPoseKind.TranslateStart || hold == HandPoseKind.TranslateEnd)
+            {
+                kind = hold;
+                lastPoseResult = kind + "(hold)";
+            }
+        }
+
         switch (kind)
         {
             case HandPoseKind.SaveEntry:
@@ -661,6 +682,12 @@ public class GestureRouter : MonoBehaviour
         SendEvent(translateGestureName, "RECOGNIZED");
         PlayFeedback(deactivationClip);
         ConsumeRightPinchIfActive();
+        // Extra time-window guard: the finger-close motion that just finished
+        // Translate keeps the pinch active for a bit, and any brief release +
+        // re-press within the next few frames would otherwise sneak into a
+        // fresh Jackknife capture. Cooldown blocks the rising-edge check
+        // outright until the user has clearly moved on.
+        SuppressPinchForCooldown(postGestureCooldownSeconds, "post-translate");
         try { OnCaptureRecognized?.Invoke(translateGestureName); } catch (Exception e) { Debug.LogError(e); }
     }
 
@@ -685,6 +712,21 @@ public class GestureRouter : MonoBehaviour
     void ConsumeRightPinchIfActive()
     {
         if (ReadPressed(pinchAction)) _wasPressed = true;
+    }
+
+    // Time-window sibling to ConsumeRightPinchIfActive: even after the current
+    // frame's edge is consumed, a follow-up pinch a few frames later can still
+    // slip through if the user's fingers keep touching then briefly release +
+    // re-press. This pushes a "cooldown deadline" forward so the rising-edge
+    // check refuses any new StartCapture until the deadline passes. Deadline
+    // only moves FORWARD -- overlapping calls extend but never shorten.
+    void SuppressPinchForCooldown(float seconds, string reason)
+    {
+        if (seconds <= 0f) return;
+        float newDeadline = Time.time + seconds;
+        if (newDeadline <= pinchCooldownUntil) return;
+        pinchCooldownUntil = newDeadline;
+        Debug.Log($"[Study Log][GestureRouter] pinch cooldown +{seconds:F2}s ('{reason}') until t={pinchCooldownUntil:F2}");
     }
 
     // Cached XRInteractionManager reference + scratch list for the XR hover

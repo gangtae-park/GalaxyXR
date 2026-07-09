@@ -131,6 +131,51 @@ public class VlmResultReceiver : MonoBehaviour
         public VlmResponse response;
     }
 
+    // One incremental chunk of a streaming LLM answer. Emitted per OpenAI
+    // content chunk (Python's on_delta callback). Cards append `delta` to
+    // whatever they've already rendered.
+    [Serializable]
+    public class VlmStreamDeltaPayload
+    {
+        public string stream_id;
+        public string request_id;
+        public string requestId;
+        public string gesture;
+        public string stage;   // "answer" (Ask) | "translation" (Translate)
+        public int seq;
+        public string delta;
+        public VlmTargetMeta target_meta;  // usually only on seq==0
+    }
+
+    // Terminator for a stream. Carries the full assembled response so the
+    // spawner can commit anchor / metadata / final answer text (the deltas
+    // alone are enough to render, but END lets us do things like write the
+    // canonical name field once).
+    [Serializable]
+    public class VlmStreamEndPayload
+    {
+        public string stream_id;
+        public string request_id;
+        public string requestId;
+        public string gesture;
+        public string stage;
+        public string status;   // "ok" | "fail"
+        public string error;
+        public VlmResponse response;
+        public VlmTargetMeta target_meta;
+    }
+
+    // Discriminated queue entry so the listener thread can push all three
+    // packet kinds into one queue and Update() dispatches to the right event.
+    private enum QueueKind { Result, Delta, End }
+    private class QueueEntry
+    {
+        public QueueKind kind;
+        public VlmResultPayload result;
+        public VlmStreamDeltaPayload delta;
+        public VlmStreamEndPayload end;
+    }
+
     [Header("Network")]
     public int port = 5006;
     public bool verboseLogging = true;
@@ -141,12 +186,17 @@ public class VlmResultReceiver : MonoBehaviour
     public ObjectActionRadialMenuSpawner objectActionMenuSpawner;
 
     public event Action<VlmResultPayload> OnResult;
+    public event Action<VlmStreamDeltaPayload> OnStreamDelta;
+    public event Action<VlmStreamEndPayload> OnStreamEnd;
+
     private const string PACKET_PREFIX = "VLM_RESULT";
+    private const string STREAM_DELTA_PREFIX = "VLM_STREAM_DELTA";
+    private const string STREAM_END_PREFIX = "VLM_STREAM_END";
 
     private UdpClient _client;
     private Thread _listenerThread;
     private volatile bool _running;
-    private readonly ConcurrentQueue<VlmResultPayload> _queue = new ConcurrentQueue<VlmResultPayload>();
+    private readonly ConcurrentQueue<QueueEntry> _queue = new ConcurrentQueue<QueueEntry>();
 
     void OnEnable() { StartListening(); }
     void OnDisable() { StopListening(); }
@@ -154,16 +204,31 @@ public class VlmResultReceiver : MonoBehaviour
 
     void Update()
     {
-        while (_queue.TryDequeue(out var payload))
+        while (_queue.TryDequeue(out var entry))
         {
-            if (verboseLogging) LogReceivedPayload(payload);
-
-            try { OnResult?.Invoke(payload); }
-            catch (Exception e) { Debug.LogError($"[Study Log][VlmResultReceiver] OnResult subscriber threw: {e}"); }
-
-            if (enableObjectActionMenu && payload.gesture != "ObjectUI" && PayloadContainsDetectionLikeData(payload))
+            switch (entry.kind)
             {
-                Debug.LogWarning($"[ObjectActionMenu][WARN] ignoring non-ObjectUI detection-like payload gesture={payload.gesture} request_id={FirstNonEmpty(payload.request_id, payload.requestId)}; route via ResultCardSpawner only.");
+                case QueueKind.Result:
+                    if (verboseLogging) LogReceivedPayload(entry.result);
+                    try { OnResult?.Invoke(entry.result); }
+                    catch (Exception e) { Debug.LogError($"[Study Log][VlmResultReceiver] OnResult subscriber threw: {e}"); }
+                    if (enableObjectActionMenu && entry.result.gesture != "ObjectUI" && PayloadContainsDetectionLikeData(entry.result))
+                    {
+                        Debug.LogWarning($"[ObjectActionMenu][WARN] ignoring non-ObjectUI detection-like payload gesture={entry.result.gesture} request_id={FirstNonEmpty(entry.result.request_id, entry.result.requestId)}; route via ResultCardSpawner only.");
+                    }
+                    break;
+                case QueueKind.Delta:
+                    if (verboseLogging)
+                        Debug.Log($"[VLM_STREAM_DELTA] gesture={entry.delta.gesture} stage={entry.delta.stage} seq={entry.delta.seq} len={entry.delta.delta?.Length ?? 0}");
+                    try { OnStreamDelta?.Invoke(entry.delta); }
+                    catch (Exception e) { Debug.LogError($"[Study Log][VlmResultReceiver] OnStreamDelta subscriber threw: {e}"); }
+                    break;
+                case QueueKind.End:
+                    if (verboseLogging)
+                        Debug.Log($"[VLM_STREAM_END] gesture={entry.end.gesture} stage={entry.end.stage} status={entry.end.status}");
+                    try { OnStreamEnd?.Invoke(entry.end); }
+                    catch (Exception e) { Debug.LogError($"[Study Log][VlmResultReceiver] OnStreamEnd subscriber threw: {e}"); }
+                    break;
             }
         }
     }
@@ -186,7 +251,7 @@ public class VlmResultReceiver : MonoBehaviour
         _running = true;
         _listenerThread = new Thread(ListenLoop) { IsBackground = true, Name = "VlmResultReceiver" };
         _listenerThread.Start();
-        Debug.Log($"[Study Log][VlmResultReceiver] listening on UDP {port} for {PACKET_PREFIX}");
+        Debug.Log($"[Study Log][VlmResultReceiver] listening on UDP {port} for {PACKET_PREFIX} + {STREAM_DELTA_PREFIX}/{STREAM_END_PREFIX}");
     }
 
     void StopListening()
@@ -219,15 +284,31 @@ public class VlmResultReceiver : MonoBehaviour
 
             int sep = text.IndexOf('|');
             if (sep <= 0) continue;
-            if (text.Substring(0, sep) != PACKET_PREFIX) continue;
-
+            string prefix = text.Substring(0, sep);
             string body = text.Substring(sep + 1);
-            VlmResultPayload payload;
-            try { payload = JsonUtility.FromJson<VlmResultPayload>(body); }
-            catch (Exception e) { Debug.LogWarning($"[Study Log][VlmResultReceiver] json: {e.Message}"); continue; }
-            if (payload == null) continue;
 
-            _queue.Enqueue(payload);
+            try
+            {
+                if (prefix == PACKET_PREFIX)
+                {
+                    var p = JsonUtility.FromJson<VlmResultPayload>(body);
+                    if (p != null) _queue.Enqueue(new QueueEntry { kind = QueueKind.Result, result = p });
+                }
+                else if (prefix == STREAM_DELTA_PREFIX)
+                {
+                    var p = JsonUtility.FromJson<VlmStreamDeltaPayload>(body);
+                    if (p != null) _queue.Enqueue(new QueueEntry { kind = QueueKind.Delta, delta = p });
+                }
+                else if (prefix == STREAM_END_PREFIX)
+                {
+                    var p = JsonUtility.FromJson<VlmStreamEndPayload>(body);
+                    if (p != null) _queue.Enqueue(new QueueEntry { kind = QueueKind.End, end = p });
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Study Log][VlmResultReceiver] json {prefix}: {e.Message}");
+            }
         }
     }
 
