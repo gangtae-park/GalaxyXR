@@ -67,16 +67,10 @@ public class GestureRouter : MonoBehaviour
     [Header("Audio feedback")]
     [Tooltip("Optional. If left empty, an AudioSource is auto-added to this GameObject the first time a feedback clip needs to play.")]
     public AudioSource feedbackAudioSource;
-    [Tooltip("Plays the instant the right-hand pinch is accepted as a gesture start (UI/XR-suppressed pinches don't play it).")]
-    public AudioClip pinchStartClip;
-    [Tooltip("Plays the instant the right-hand pinch is released and Jackknife is about to classify. Fires regardless of match/reject outcome.")]
-    public AudioClip pinchReleaseClip;
-    [Tooltip("Plays when SaveEntry pose (left palm open, facing camera) is first detected.")]
-    public AudioClip saveEntryClip;
-    [Tooltip("Plays when CapturePose (both hands framing) is first detected -- the 2s hold that follows is silent.")]
-    public AudioClip capturePoseClip;
-    [Tooltip("Plays when the right-hand C-shape (Translate start pose) is first detected.")]
-    public AudioClip translateStartClip;
+    [Tooltip("Activation cue -- played whenever a gesture BEGINS: right pinch accepted (Jackknife START), SaveEntry pose detected, CapturePose detected, Translate C-shape detected. UI/XR-suppressed pinches do NOT play it.")]
+    public AudioClip activationClip;
+    [Tooltip("Deactivation cue -- played whenever a gesture ENDS regardless of match/reject outcome: pinch release (Jackknife END), Save match/cancel, Camera match/cancel, Translate match/cancel.")]
+    public AudioClip deactivationClip;
     [Range(0f, 1f)] public float feedbackVolume = 1f;
 
     [Header("Pose recognition (Save / Capture)")]
@@ -264,7 +258,7 @@ public class GestureRouter : MonoBehaviour
                     // so the user hears the pinch-end cue regardless of whether
                     // classification matches or rejects.
                     ContinueCapture();
-                    PlayFeedback(pinchReleaseClip);
+                    PlayFeedback(deactivationClip);
                     FinishCaptureOnRelease();
                 }
                 else
@@ -297,7 +291,7 @@ public class GestureRouter : MonoBehaviour
         lastRecognized = "";
 
         SendEvent(pendingReferentName, "START");
-        PlayFeedback(pinchStartClip);
+        PlayFeedback(activationClip);
         try { OnCaptureStarted?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
 
@@ -555,7 +549,7 @@ public class GestureRouter : MonoBehaviour
         _saveEntryDeadline = Time.time + saveEntryHoldTimeoutSeconds;
         Debug.Log($"[Study Log][GestureRouter] {saveGestureName} pending: left palm up");
         SendEvent(saveGestureName, "START");
-        PlayFeedback(saveEntryClip);
+        PlayFeedback(activationClip);
         try { OnCaptureStarted?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
 
@@ -567,6 +561,7 @@ public class GestureRouter : MonoBehaviour
         Debug.Log($"[Study Log][GestureRouter] RECOGNIZED: '{saveGestureName}'");
         SendEvent(saveGestureName, "END");
         SendEvent(saveGestureName, "RECOGNIZED");
+        PlayFeedback(deactivationClip);
         ConsumeRightPinchIfActive();
         try { OnCaptureRecognized?.Invoke(saveGestureName); } catch (Exception e) { Debug.LogError(e); }
     }
@@ -577,6 +572,7 @@ public class GestureRouter : MonoBehaviour
         saveRearmRequired = true;
         Debug.Log($"[Study Log][GestureRouter] REJECT: '{saveGestureName}', {reason}");
         SendEvent(saveGestureName, "FAIL");
+        PlayFeedback(deactivationClip);
         ConsumeRightPinchIfActive();
         try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
@@ -599,7 +595,7 @@ public class GestureRouter : MonoBehaviour
         lastRecognized = "";
         Debug.Log($"[Study Log][GestureRouter] {captureGestureName} pose detected");
         SendEvent(captureGestureName, "START");
-        PlayFeedback(capturePoseClip);
+        PlayFeedback(activationClip);
         try { OnCaptureStarted?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
 
@@ -611,6 +607,7 @@ public class GestureRouter : MonoBehaviour
         Debug.Log($"[Study Log][GestureRouter] RECOGNIZED: '{captureGestureName}'");
         SendEvent(captureGestureName, "END");
         SendEvent(captureGestureName, "RECOGNIZED");
+        PlayFeedback(deactivationClip);
         ConsumeRightPinchIfActive();
         try { OnCaptureRecognized?.Invoke(captureGestureName); } catch (Exception e) { Debug.LogError(e); }
     }
@@ -621,6 +618,7 @@ public class GestureRouter : MonoBehaviour
         cameraRearmRequired = true;
         Debug.Log($"[Study Log][GestureRouter] REJECT: '{captureGestureName}', {reason}");
         SendEvent(captureGestureName, "FAIL");
+        PlayFeedback(deactivationClip);
         ConsumeRightPinchIfActive();
         try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
@@ -647,7 +645,7 @@ public class GestureRouter : MonoBehaviour
         lastRecognized = "";
         Debug.Log($"[Study Log][GestureRouter] {translateGestureName} pending: right C-shape at {translateStartHandPos}");
         SendEvent(translateGestureName, "START");
-        PlayFeedback(translateStartClip);
+        PlayFeedback(activationClip);
         try { OnCaptureStarted?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
 
@@ -661,6 +659,7 @@ public class GestureRouter : MonoBehaviour
         Debug.Log($"[Study Log][GestureRouter] RECOGNIZED: '{translateGestureName}' held {translateElapsed:F2}s, sweep={sweep} (|{sweep.magnitude:F3}m|)");
         SendEvent(translateGestureName, "END");
         SendEvent(translateGestureName, "RECOGNIZED");
+        PlayFeedback(deactivationClip);
         ConsumeRightPinchIfActive();
         try { OnCaptureRecognized?.Invoke(translateGestureName); } catch (Exception e) { Debug.LogError(e); }
     }
@@ -671,6 +670,7 @@ public class GestureRouter : MonoBehaviour
         translateRearmRequired = true;
         Debug.Log($"[Study Log][GestureRouter] REJECT: '{translateGestureName}', {reason}");
         SendEvent(translateGestureName, "FAIL");
+        PlayFeedback(deactivationClip);
         ConsumeRightPinchIfActive();
         try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }

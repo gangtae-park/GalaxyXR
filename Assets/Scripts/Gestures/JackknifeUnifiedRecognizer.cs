@@ -90,9 +90,15 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
 
     void Awake()
     {
+        // Only path resolution + Resources bootstrap happen automatically.
+        // Rebuild() is now triggered manually from the StudyManagerCanvas
+        // Rebuild button (wire the Button's onClick to Rebuild() in the
+        // Inspector). This lets the study operator load templates on demand
+        // instead of paying the disk read + Jackknife training cost at scene
+        // start. Until Rebuild runs, `ready` stays false and Recognize()
+        // returns null -- gestures are effectively disabled.
         ResolvePath();
         BootstrapTemplatesFromResourcesIfNeeded();
-        Rebuild();
     }
 
     void ResolvePath()
@@ -273,7 +279,9 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
     /*
     Append a recorded trajectory to the templates file.
     `retrain` controls whether Jackknife is retrained immediately.
-    The inference scene calls Rebuild() once at startup.
+    The inference scene loads templates on demand -- the StudyManagerCanvas
+    Rebuild button is wired to Rebuild() and must be pressed once before
+    Recognize() will return anything.
     */
 
     public bool AppendTemplate(string label, List<float[]> frames, bool retrain = true)

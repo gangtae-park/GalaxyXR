@@ -678,11 +678,8 @@ MonoBehaviour:
   requireBothPinchHeldToComplete: 1
   verboseCompareLogging: 0
   feedbackAudioSource: {fileID: 0}
-  pinchStartClip: {fileID: 8300000, guid: 16fba6d30ed741d4a9fdd6e79ee2f3ac, type: 3}
-  pinchReleaseClip: {fileID: 0}
-  saveEntryClip: {fileID: 8300000, guid: 16fba6d30ed741d4a9fdd6e79ee2f3ac, type: 3}
-  capturePoseClip: {fileID: 8300000, guid: 16fba6d30ed741d4a9fdd6e79ee2f3ac, type: 3}
-  translateStartClip: {fileID: 8300000, guid: 16fba6d30ed741d4a9fdd6e79ee2f3ac, type: 3}
+  activationClip: {fileID: 8300000, guid: 8674720ab1c6b4edc83336f49c1a9254, type: 3}
+  deactivationClip: {fileID: 8300000, guid: a473aaa301cb44e259a020e19d262bf8, type: 3}
   feedbackVolume: 1
   poseRecognizer: {fileID: 136429833}
   poseEvalIntervalSeconds: 0.1
@@ -805,12 +802,12 @@ MonoBehaviour:
   thumbIndexPerpDot: 0.7
   handsAntiParallelDot: -0.5
   translateThumbIndexGapMin: 0.04
-  translateOtherCurledRatio: 0.85
+  translateOtherCurledRatio: 0.5
   translateThumbMinExtension: 0.7
   translateIndexMinExtension: 0.7
   translateIndexMaxExtension: 0.96
   translateStartRequireOrientation: 1
-  translateStartPalmFacingLeftDot: 0.7
+  translateStartPalmFacingLeftDot: 0.6
   lastResult: 0
   leftHandTracked: 0
   rightHandTracked: 0
@@ -3949,7 +3946,7 @@ GameObject:
   - component: {fileID: 682384893}
   - component: {fileID: 682384892}
   m_Layer: 5
-  m_Name: NextSceneButton
+  m_Name: RebuildButton
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4019,9 +4016,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 1708595858}
-        m_TargetAssemblyTypeName: SceneNavigator, Assembly-CSharp
-        m_MethodName: LoadNextScene
+      - m_Target: {fileID: 136429831}
+        m_TargetAssemblyTypeName: JackknifeUnifiedRecognizer, Assembly-CSharp
+        m_MethodName: Rebuild
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -9661,7 +9658,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Next Scene
+  m_text: Rebuild
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 0abd47c16522045f4bbfb922abbab4a2, type: 2}
   m_sharedMaterial: {fileID: 43631850282595861, guid: 0abd47c16522045f4bbfb922abbab4a2, type: 2}
