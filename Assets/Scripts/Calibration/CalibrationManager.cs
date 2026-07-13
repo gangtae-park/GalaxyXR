@@ -27,6 +27,8 @@ public class CalibrationManager : MonoBehaviour
     [Header("After completion")]
     public string nextSceneName = "GazeGestureScene";
     public float nextSceneDelaySeconds = 1.0f;
+    [Tooltip("Optional. When assigned, the 9-dot calibration hands off to the random saccadic evaluation task instead of loading the next scene directly; the task loads the next scene when it finishes.")]
+    public SaccadicTaskController saccadicTask;
 
     private readonly List<GameObject> dots = new List<GameObject>();
     private int currentIndex = 0;
@@ -108,11 +110,21 @@ public class CalibrationManager : MonoBehaviour
         {
             ShowNextDot();
         }
+        else if (saccadicTask != null)
+        {
+            Debug.Log("[CalibrationManager] Calibration complete -- starting saccadic evaluation.");
+            Invoke(nameof(StartSaccadicEvaluation), nextSceneDelaySeconds);
+        }
         else
         {
             Debug.Log("[CalibrationManager] Calibration complete -- loading next scene.");
             Invoke(nameof(FinishCalibration), nextSceneDelaySeconds);
         }
+    }
+
+    void StartSaccadicEvaluation()
+    {
+        saccadicTask.BeginEvaluationPhase();
     }
 
     public void FinishCalibration()

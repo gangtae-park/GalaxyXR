@@ -421,7 +421,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1234129722}
   - component: {fileID: 1234129721}
-  - component: {fileID: 1234129719}
   m_Layer: 0
   m_Name: Gaze Manager
   m_TagString: Untagged
@@ -429,24 +428,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1234129719
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1234129718}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 75097932ec5644f1381ad158e3fd6f2d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GazeSender
-  serverIP: 192.168.0.3
-  port: 5005
-  eyeGazeReader: {fileID: 1234129721}
-  gazeRotationAction: {fileID: -5930349909990434036, guid: c348712bda248c246b8c49b3db54643f, type: 3}
-  gazeTrackingStateAction: {fileID: 2069149553511882089, guid: c348712bda248c246b8c49b3db54643f, type: 3}
-  sendHz: 30
 --- !u!114 &1234129721
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -498,6 +479,7 @@ GameObject:
   - component: {fileID: 1619092850}
   - component: {fileID: 1619092849}
   - component: {fileID: 1619092848}
+  - component: {fileID: 1619092852}
   m_Layer: 0
   m_Name: CalibManager
   m_TagString: Untagged
@@ -541,8 +523,9 @@ MonoBehaviour:
   horizontalSpacing: 0.25
   verticalSpacing: 0.25
   gridOffset: {x: 0, y: -0.05, z: 0}
-  nextSceneName: GazeGestureScene
+  nextSceneName: DataCollectionScene
   nextSceneDelaySeconds: 1
+  saccadicTask: {fileID: 1619092852}
 --- !u!114 &1619092850
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -572,6 +555,29 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1619092852
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1619092847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67a52d0d272ce47a491372b979a9b57a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SaccadicTaskController
+  manager: {fileID: 1619092849}
+  calibSender: {fileID: 1619092848}
+  fixationCount: 30
+  fixationSeconds: 1
+  countdownSeconds: 3
+  minSaccadeAngleDeg: 3
+  startHoldSeconds: 1
+  startScaleMultiplier: 1.6
+  labelFontSize: 1
+  labelColor: {r: 1, g: 1, b: 1, a: 1}
+  labelYOffset: 0.12
 --- !u!20 &1948693200 stripped
 Camera:
   m_CorrespondingSourceObject: {fileID: 657184242118504724, guid: d6878e1999eb4b44a9f5a263af86c185, type: 3}

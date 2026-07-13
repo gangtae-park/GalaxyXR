@@ -85,6 +85,8 @@ public class HandPoseRecognizer : MonoBehaviour
     public bool translateStartRequireOrientation = true;
     [Tooltip("How strongly the right palm must face the user's LEFT. Higher = stricter (0.7 accepts only near-perfect left-facing); lower = looser (0.2 accepts almost any leftward tilt). Uses the same palm-normal convention as the Save pose (palm.rotation * (0,-1,0) points OUT of the palm surface). The palm normal and camera-right are BOTH projected onto the horizontal plane before dotting, so head yaw rotates the reference cleanly with the head and head pitch/roll don't leak into the score. Recommended range 0.3-0.6.")]
     [Range(-1f, 1f)] public float translateStartPalmFacingLeftDot = 0.4f;
+    [Tooltip("Reject the C-shape when the RIGHT palm is turned toward the user -- the camera must see the BACK of the hand. dot(palm normal, hand->camera direction) must stay at or below this. A genuine mirrored C sits well below 0 (P00 pilot 95th percentile: 0.04) while a palm-at-camera pose (e.g. Capture's right-hand L) reads +0.7 or higher, so 0.2 passes real Cs with margin and rejects palm-visible poses. Raise toward 0.5 if valid Cs get rejected; set to 1 to disable. Enter-path only -- like the palm-left check it is not re-enforced during the committed hold.")]
+    [Range(-1f, 1f)] public float translateMaxPalmToCameraDot = 0.2f;
 
     [Header("Status (read-only)")]
     [SerializeField] private HandPoseKind lastResult;
@@ -111,6 +113,7 @@ public class HandPoseRecognizer : MonoBehaviour
     [SerializeField] private float translateThumbExt = -1f;
     [SerializeField] private float translateIndexExt = -1f;
     [SerializeField] private float translatePalmDot = -2f;
+    [SerializeField] private float translatePalmCamDot = -2f;
     [SerializeField] private string translateReject = "";
 
     [Header("Debug")]
@@ -245,7 +248,7 @@ public class HandPoseRecognizer : MonoBehaviour
                 // $" | leftL={cameraLeftLShape}({lLShapeReject}) rightL={cameraRightLShape}({rLShapeReject})" +
                 // $" L={lThumbIndexDot:F2} R={rThumbIndexDot:F2}" +
                 // $" | thumbsDot={cameraThumbsDot:F2} indexesDot={cameraIndexesDot:F2}" +
-                $" | translateC={translateCShape}({translateReject}) gap={translateThumbIndexGap:F3} thumbExt={translateThumbExt:F2} indexExt={translateIndexExt:F2} palmDot={translatePalmDot:F2}"
+                $" | translateC={translateCShape}({translateReject}) gap={translateThumbIndexGap:F3} thumbExt={translateThumbExt:F2} indexExt={translateIndexExt:F2} palmDot={translatePalmDot:F2} palmCamDot={translatePalmCamDot:F2}"
             );
         }
         return k;
@@ -423,6 +426,7 @@ public class HandPoseRecognizer : MonoBehaviour
         translateThumbExt = -1f;
         translateIndexExt = -1f;
         translatePalmDot = -2f;
+        translatePalmCamDot = -2f;
         translateReject = "";
 
         // Thumb: extended, no upper cap (a fully-straight thumb is expected).
@@ -464,20 +468,40 @@ public class HandPoseRecognizer : MonoBehaviour
         // projected onto the horizontal plane before dotting. Applies equally
         // to Start and End -- if the user rotates the hand during closing,
         // the pose invalidates and translatePending will cancel.
-        if (translateStartRequireOrientation)
+        bool needPalmPose = translateStartRequireOrientation || translateMaxPalmToCameraDot < 1f;
+        if (needPalmPose)
         {
             if (!right.GetJoint(XRHandJointID.Palm).TryGetPose(out Pose palmPose))
             { translateReject = "palm joint not tracked"; return HandPoseKind.None; }
             Vector3 palmNormal = palmPose.rotation * new Vector3(0f, -1f, 0f);
 
-            Vector3 palmH = FlattenHorizontal(palmNormal);
-            Vector3 refRightH = FlattenHorizontal(ResolveReferenceRight());
-            if (palmH == Vector3.zero || refRightH == Vector3.zero)
-            { translateReject = "orientation nearly vertical -- can't project to horizontal"; return HandPoseKind.None; }
+            // Back of the hand must be what the user sees: reject when the
+            // palm normal points toward the camera. This is what separates a
+            // real mirrored C (dot stays below ~0) from palm-visible poses
+            // like Capture's right-hand L (~+0.8), which pass every
+            // extension/curl check above.
+            if (translateMaxPalmToCameraDot < 1f)
+            {
+                Vector3 toCamera = GetCameraPosition() - palmPose.position;
+                if (toCamera.sqrMagnitude > 1e-8f)
+                {
+                    translatePalmCamDot = Vector3.Dot(palmNormal, toCamera.normalized);
+                    if (translatePalmCamDot > translateMaxPalmToCameraDot)
+                    { translateReject = $"palm facing camera ({translatePalmCamDot:F2} > {translateMaxPalmToCameraDot:F2})"; return HandPoseKind.None; }
+                }
+            }
 
-            translatePalmDot = Vector3.Dot(palmH, -refRightH);
-            if (translatePalmDot < translateStartPalmFacingLeftDot)
-            { translateReject = $"palm not facing left ({translatePalmDot:F2} < {translateStartPalmFacingLeftDot:F2})"; return HandPoseKind.None; }
+            if (translateStartRequireOrientation)
+            {
+                Vector3 palmH = FlattenHorizontal(palmNormal);
+                Vector3 refRightH = FlattenHorizontal(ResolveReferenceRight());
+                if (palmH == Vector3.zero || refRightH == Vector3.zero)
+                { translateReject = "orientation nearly vertical -- can't project to horizontal"; return HandPoseKind.None; }
+
+                translatePalmDot = Vector3.Dot(palmH, -refRightH);
+                if (translatePalmDot < translateStartPalmFacingLeftDot)
+                { translateReject = $"palm not facing left ({translatePalmDot:F2} < {translateStartPalmFacingLeftDot:F2})"; return HandPoseKind.None; }
+            }
         }
 
         // Base OK -- decide Start vs End on the gap alone.

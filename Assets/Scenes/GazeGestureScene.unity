@@ -667,7 +667,7 @@ MonoBehaviour:
   msgSender: {fileID: 1110963236}
   inputModeManager: {fileID: 6614100000000000002}
   minFrameInterval: 0.03
-  minFramesForRecognition: 20
+  minFramesForRecognition: 15
   pendingReferentName: Pending
   leftPinchAction: {fileID: -6131295136447488360, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   rightIndexTip: {fileID: 5534409079552104258}
@@ -690,6 +690,7 @@ MonoBehaviour:
   translateGestureName: Translate
   verboseCameraHoldLogging: 0
   cameraHoldLogIntervalSeconds: 0.5
+  postGestureCooldownSeconds: 0.4
   capturing: 0
   captureElapsed: 0
   bufferFrameCount: 0
@@ -709,6 +710,7 @@ MonoBehaviour:
   translateEndHandPos: {x: 0, y: 0, z: 0}
   pinchSuppressed: 0
   pinchSuppressReason: 
+  pinchCooldownUntil: 0
   lastPoseResult: 
 --- !u!114 &136429831
 MonoBehaviour:
@@ -801,13 +803,13 @@ MonoBehaviour:
   fingerCurledRatio: 0.7
   thumbIndexPerpDot: 0.7
   handsAntiParallelDot: -0.5
-  translateThumbIndexGapMin: 0.04
-  translateOtherCurledRatio: 0.5
-  translateThumbMinExtension: 0.7
-  translateIndexMinExtension: 0.7
+  translateThumbIndexGapMin: 0.03
+  translateOtherCurledRatio: 0.6
+  translateThumbMinExtension: 0.9
+  translateIndexMinExtension: 0.6
   translateIndexMaxExtension: 0.995
   translateStartRequireOrientation: 1
-  translateStartPalmFacingLeftDot: 0.6
+  translateStartPalmFacingLeftDot: 0.4
   lastResult: 0
   leftHandTracked: 0
   rightHandTracked: 0
