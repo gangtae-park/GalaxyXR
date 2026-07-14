@@ -7,7 +7,7 @@ SearchResultCardSpawner
 
 Single dispatcher for every referent's result card. Despite the legacy class
 name (kept to avoid breaking scene references), this now handles ALL gestures
-that produce a card -- not just Search/Find Info.
+that produce a card -- not just Search.
 
 Responsibilities:
 
@@ -18,7 +18,7 @@ Responsibilities:
 
   2) On every VlmResultPayload from VlmResultReceiver, dispatch by payload.gesture:
 
-       "Search/Find Info"  -> spawn SearchResultCard with (name, result_search)
+       "Search"            -> spawn SearchResultCard with (name, result_search)
        "Ask"  + no answer  -> spawn AskQuestionCard with name; wait for the
                               user's voice-question via card.OnQuestionSubmitted;
                               pass the captured question to MsgSender.SendAskQuestion
@@ -332,7 +332,8 @@ public class ResultCardSpawner : MonoBehaviour
 
         switch (gesture)
         {
-            case "Search/Find Info":
+            case "Search":
+            case "Search/Find Info": // legacy referent name, kept for old payloads
                 SpawnSearchResult(payload);
                 break;
 

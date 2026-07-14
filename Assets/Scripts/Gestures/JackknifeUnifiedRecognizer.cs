@@ -47,6 +47,16 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
     public int gpsrR = 2;
     public int minTemplatesToTrain = 4;
 
+    [Header("Training cache")]
+    [Tooltip("Cache the per-template rejection thresholds (the only thing Train() computes) next to the template file. When the template file and Jackknife params are unchanged, Rebuild skips the Monte-Carlo training entirely -- from minutes to milliseconds at 160+ templates.")]
+    public bool useThresholdCache = true;
+    [Tooltip("When a valid threshold cache exists, run Rebuild automatically at scene start (it is cheap then).")]
+    public bool autoRebuildOnStartWhenCached = true;
+    [Tooltip("On a cache miss (fresh install / templates changed) automatically train on a BACKGROUND thread at scene start instead of waiting for the manual Rebuild button. The scene stays responsive; recognition turns on when training finishes and the cache makes every later launch instant. No manual step is ever needed.")]
+    public bool autoTrainInBackgroundOnCacheMiss = true;
+    [Tooltip("Monte-Carlo iterations for threshold learning (Jackknife paper uses 1000). Lower = faster cold Rebuild with slightly noisier rejection thresholds; 250 is a reasonable floor.")]
+    public int trainIterations = 1000;
+
     [Header("Pre-filter")]
     public int minFrameCount = 8;
 
@@ -99,6 +109,21 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         // returns null -- gestures are effectively disabled.
         ResolvePath();
         BootstrapTemplatesFromResourcesIfNeeded();
+
+        // Fast path: if the threshold cache matches the current template file,
+        // Rebuild costs only the disk read + feature extraction, so it is safe
+        // to run at scene start. A stale/missing cache keeps the old manual
+        // flow (Rebuild button) so the minutes-long training never blocks here.
+        if (useThresholdCache && autoRebuildOnStartWhenCached && ThresholdCacheMatches())
+        {
+            Debug.Log("[StudyLog][JackknifeRecognizer] valid threshold cache found -- auto-rebuilding at start.");
+            Rebuild();
+        }
+        else if (autoTrainInBackgroundOnCacheMiss)
+        {
+            Debug.Log("[StudyLog][JackknifeRecognizer] no valid threshold cache -- training in background.");
+            RebuildInBackground();
+        }
     }
 
     void ResolvePath()
@@ -140,9 +165,69 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         }
     }
 
+    private Coroutine _rebuildRoutine;
+
     [ContextMenu("Rebuild From Disk")]
     public void Rebuild()
     {
+        if (_rebuildRoutine != null)
+        {
+            Debug.LogWarning("[StudyLog][JackknifeRecognizer] background rebuild already running; ignoring manual Rebuild.");
+            return;
+        }
+        int added = BuildRecognizer(out string configHash);
+        if (added < 0) return;
+        if (TryApplyCachedThresholds(configHash, added)) return;
+        TrainSync(added, configHash);
+    }
+
+    /// <summary>Non-blocking Rebuild: the build/cache phase runs on the main
+    /// thread (fast), and on a cache miss Train() runs on a worker thread so
+    /// scene load / interaction never stalls. `ready` flips on completion.</summary>
+    public void RebuildInBackground()
+    {
+        if (_rebuildRoutine != null) return;
+        _rebuildRoutine = StartCoroutine(RebuildRoutine());
+    }
+
+    System.Collections.IEnumerator RebuildRoutine()
+    {
+        int added = BuildRecognizer(out string configHash);
+        if (added < 0 || TryApplyCachedThresholds(configHash, added))
+        {
+            _rebuildRoutine = null;
+            yield break;
+        }
+
+        JKRecognizer jk = _jk;
+        int iters = Mathf.Max(50, trainIterations);
+        int n = gpsrN, r = gpsrR;
+        double b = beta;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var task = System.Threading.Tasks.Task.Run(() => jk.Train(n, r, b, iters));
+        while (!task.IsCompleted) yield return null;
+
+        if (task.IsFaulted)
+        {
+            Debug.LogError($"[StudyLog][JackknifeRecognizer] background Train() failed: {task.Exception}");
+        }
+        else if (jk == _jk) // recognizer not replaced by another Rebuild meanwhile
+        {
+            ready = true;
+            SaveThresholdCache(configHash);
+            Debug.Log(
+                $"[StudyLog][JackknifeRecognizer] background training done: {added} templates in " +
+                $"{sw.Elapsed.TotalSeconds:F1}s. classes=[{string.Join(", ", knownGestures)}]"
+            );
+        }
+        _rebuildRoutine = null;
+    }
+
+    /// <summary>Load + feature-extract all templates (fast). Returns the added
+    /// template count, or -1 when there is nothing usable to train on.</summary>
+    int BuildRecognizer(out string configHash)
+    {
+        configHash = "";
         ready = false;
         _idToName.Clear();
 
@@ -152,7 +237,7 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         {
             featureDim = -1;
             Debug.LogWarning($"[StudyLog][JackknifeRecognizer] no templates at {_saveFilePath}");
-            return;
+            return -1;
         }
 
         featureDim = -1;
@@ -164,7 +249,7 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         if (featureDim <= 0)
         {
             Debug.LogWarning("[StudyLog][JackknifeRecognizer] templates exist but every frame is empty.");
-            return;
+            return -1;
         }
 
         var blades = new JKBlades();
@@ -215,22 +300,129 @@ public class JackknifeUnifiedRecognizer : MonoBehaviour
         if (added < minTemplatesToTrain)
         {
             Debug.LogWarning($"[StudyLog][JackknifeRecognizer] only {added} templates (need >= {minTemplatesToTrain}). ");
-            return;
+            return -1;
         }
 
+        configHash = ComputeConfigHash();
+        return added;
+    }
+
+    bool TryApplyCachedThresholds(string configHash, int added)
+    {
+        if (!useThresholdCache) return false;
+        if (!TryLoadThresholdCache(configHash, out double[] cachedThresholds)) return false;
+        if (!_jk.SetRejectionThresholds(cachedThresholds)) return false;
+        ready = true;
+        Debug.Log(
+            $"[StudyLog][JackknifeRecognizer] loaded {added} templates, thresholds from cache " +
+            $"(training skipped). featureDim={featureDim}, classes=[{string.Join(", ", knownGestures)}]"
+        );
+        return true;
+    }
+
+    void TrainSync(int added, string configHash)
+    {
         try
         {
-            _jk.Train(gpsrN, gpsrR, beta);
+            float t0 = Time.realtimeSinceStartup;
+            _jk.Train(gpsrN, gpsrR, beta, Mathf.Max(50, trainIterations));
             ready = true;
             Debug.Log(
-                $"[StudyLog][JackknifeRecognizer] trained on {added} templates, featureDim={featureDim}. " +
+                $"[StudyLog][JackknifeRecognizer] trained on {added} templates in " +
+                $"{Time.realtimeSinceStartup - t0:F1}s, featureDim={featureDim}. " +
                 $"classes=[{string.Join(", ", knownGestures)}]"
             );
+            if (useThresholdCache) SaveThresholdCache(configHash);
         }
         catch (Exception e)
         {
             Debug.LogError($"[StudyLog][JackknifeRecognizer] Train() failed: {e}");
         }
+    }
+
+    // ---------- Threshold cache ----------
+    // Train() only learns one rejection threshold per template; everything
+    // else Rebuild does (feature extraction) is fast. So we persist the
+    // thresholds keyed by a hash of the template file + all params that
+    // influence training, and skip Train when nothing changed.
+
+    [Serializable]
+    private class ThresholdCache
+    {
+        public string hash;
+        public double[] thresholds;
+    }
+
+    string ThresholdCachePath => _saveFilePath + ".thresholds.json";
+
+    string ComputeConfigHash()
+    {
+        try
+        {
+            string raw = File.Exists(_saveFilePath) ? File.ReadAllText(_saveFilePath) : "";
+            string config = $"|rs={resampleCount}|r={radius}|eu={useEuclidean}|b={beta}" +
+                            $"|n={gpsrN}|g={gpsrR}|it={Mathf.Max(50, trainIterations)}|dim={featureDim}";
+            using (var sha = System.Security.Cryptography.SHA1.Create())
+            {
+                byte[] h = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(raw + config));
+                return BitConverter.ToString(h).Replace("-", "");
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"[StudyLog][JackknifeRecognizer] cache hash failed: {e.Message}");
+            return "";
+        }
+    }
+
+    bool TryLoadThresholdCache(string configHash, out double[] thresholds)
+    {
+        thresholds = null;
+        if (string.IsNullOrEmpty(configHash) || !File.Exists(ThresholdCachePath)) return false;
+        try
+        {
+            var cache = JsonUtility.FromJson<ThresholdCache>(File.ReadAllText(ThresholdCachePath));
+            if (cache == null || cache.hash != configHash || cache.thresholds == null) return false;
+            thresholds = cache.thresholds;
+            return true;
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"[StudyLog][JackknifeRecognizer] cache load failed: {e.Message}");
+            return false;
+        }
+    }
+
+    void SaveThresholdCache(string configHash)
+    {
+        if (string.IsNullOrEmpty(configHash) || _jk == null) return;
+        try
+        {
+            var cache = new ThresholdCache { hash = configHash, thresholds = _jk.GetRejectionThresholds() };
+            File.WriteAllText(ThresholdCachePath, JsonUtility.ToJson(cache));
+            Debug.Log($"[StudyLog][JackknifeRecognizer] threshold cache saved ({cache.thresholds.Length} entries).");
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"[StudyLog][JackknifeRecognizer] cache save failed: {e.Message}");
+        }
+    }
+
+    // Cheap pre-check for Awake: does a cache exist that matches the current
+    // template file? featureDim is not known before Rebuild, so it is probed
+    // the same way Rebuild does (first non-empty frame).
+    bool ThresholdCacheMatches()
+    {
+        if (!File.Exists(ThresholdCachePath) || !File.Exists(_saveFilePath)) return false;
+        TemplateFile file = LoadFile();
+        featureDim = -1;
+        for (int i = 0; i < file.templates.Count && featureDim < 0; i++)
+        {
+            foreach (var f in file.templates[i].frames)
+                if (f.values != null && f.values.Count > 0) { featureDim = f.values.Count; break; }
+        }
+        if (featureDim <= 0) return false;
+        return TryLoadThresholdCache(ComputeConfigHash(), out _);
     }
 
     public string Recognize(List<float[]> trajectory)

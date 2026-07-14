@@ -3506,7 +3506,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 33ac240fd2ab0495f8396e28401a7213, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PilotStudyController
-  participantId: 2
+  participantId: 3
   trialsPerReferent: 10
   trialOverrides:
   - referent: Search

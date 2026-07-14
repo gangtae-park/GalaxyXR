@@ -681,6 +681,7 @@ MonoBehaviour:
   activationClip: {fileID: 8300000, guid: 8674720ab1c6b4edc83336f49c1a9254, type: 3}
   deactivationClip: {fileID: 8300000, guid: a473aaa301cb44e259a020e19d262bf8, type: 3}
   feedbackVolume: 1
+  silentTranslateToCaptureHandoff: 1
   poseRecognizer: {fileID: 136429833}
   poseEvalIntervalSeconds: 0.1
   saveGestureName: Save
@@ -736,6 +737,10 @@ MonoBehaviour:
   gpsrN: 6
   gpsrR: 2
   minTemplatesToTrain: 4
+  useThresholdCache: 1
+  autoRebuildOnStartWhenCached: 1
+  autoTrainInBackgroundOnCacheMiss: 1
+  trainIterations: 250
   minFrameCount: 8
   rejectLabels:
   - False
@@ -810,6 +815,7 @@ MonoBehaviour:
   translateIndexMaxExtension: 0.995
   translateStartRequireOrientation: 1
   translateStartPalmFacingLeftDot: 0.4
+  translateMaxPalmToCameraDot: 0.2
   lastResult: 0
   leftHandTracked: 0
   rightHandTracked: 0
@@ -842,6 +848,7 @@ MonoBehaviour:
   translateThumbExt: -1
   translateIndexExt: -1
   translatePalmDot: -2
+  translatePalmCamDot: -2
   translateReject: 
   verboseLogging: 1
 --- !u!1 &152278406
@@ -8896,7 +8903,7 @@ MonoBehaviour:
   m_MultiSelect: 0
   m_Options:
     m_Options:
-    - m_Text: Search/Find Info
+    - m_Text: Search
       m_Image: {fileID: 0}
       m_Color: {r: 1, g: 1, b: 1, a: 1}
     - m_Text: Ask
@@ -12131,7 +12138,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Search/Find Info
+  m_text: Search
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}
   m_sharedMaterial: {fileID: -8081388478298098407, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}

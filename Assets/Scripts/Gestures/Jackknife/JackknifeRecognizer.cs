@@ -74,7 +74,7 @@ namespace Jackknife
          * See explanation in jackknife_train to understand
          * the input parameters.
          */
-        public void Train(int gpsrN, int gpsrR, double beta)
+        public void Train(int gpsrN, int gpsrR, double beta, int iterations = 1000)
         {
             int template_cnt = templates.Count;
             List<Distributions> distributions = new List<Distributions>();
@@ -87,7 +87,7 @@ namespace Jackknife
             //
             // Create negative samples.
             //
-            for (int i = 0; i < 1000; i++)
+            for (int i = 0; i < iterations; i++)
             {
                 synthetic.Clear();
 
@@ -140,7 +140,7 @@ namespace Jackknife
             //
             for (int t = 0; t < template_cnt; t++)
             {
-                for (int i = 0; i < 1000; i++)
+                for (int i = 0; i < iterations; i++)
                 {
                     synthetic.Clear();
 
@@ -176,6 +176,34 @@ namespace Jackknife
         * because of early rejection, such a list may not make sense.
         *
         */
+        /**
+        * The per-template rejection thresholds are the ONLY artifact Train()
+        * produces, so they can be cached externally and restored to skip the
+        * expensive Monte-Carlo pass when the template set has not changed.
+        * Order matches AddTemplate() order -- call both accessors BEFORE the
+        * first Classify(), which re-sorts the internal template list.
+        */
+        public double[] GetRejectionThresholds()
+        {
+            double[] outArr = new double[templates.Count];
+            for (int t = 0; t < templates.Count; t++)
+                outArr[t] = templates[t].RejectionThreshold;
+            return outArr;
+        }
+
+        public bool SetRejectionThresholds(double[] thresholds)
+        {
+            if (thresholds == null || thresholds.Length != templates.Count)
+                return false;
+            for (int t = 0; t < templates.Count; t++)
+            {
+                JackknifeTemplate temp = templates[t];
+                temp.RejectionThreshold = thresholds[t];
+                templates[t] = temp;
+            }
+            return true;
+        }
+
         public int Classify(List<Vector> trajectory)
         {
             JackknifeFeatures features = new JackknifeFeatures(Blades, trajectory);
