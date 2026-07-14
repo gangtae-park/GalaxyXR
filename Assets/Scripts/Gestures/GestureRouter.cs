@@ -72,6 +72,8 @@ public class GestureRouter : MonoBehaviour
     [Tooltip("Deactivation cue -- played whenever a gesture ENDS regardless of match/reject outcome: pinch release (Jackknife END), Save match/cancel, Camera match/cancel, Translate match/cancel.")]
     public AudioClip deactivationClip;
     [Range(0f, 1f)] public float feedbackVolume = 1f;
+    [Tooltip("When ON, a Translate C-shape morphing directly into the Capture pose hands off silently: the Translate cancel skips the deactivation clip and the Capture entry skips the activation clip, so the transition doesn't double-beep. Every other enter/cancel path keeps its sound.")]
+    public bool silentTranslateToCaptureHandoff = true;
 
     [Header("Pose recognition (Save / Capture)")]
     public HandPoseRecognizer poseRecognizer;
@@ -501,10 +503,17 @@ public class GestureRouter : MonoBehaviour
                 break;
             case HandPoseKind.CapturePose:
                 if (savePending) FinishSaveCancel($"pose changed to '{captureGestureName}'");
-                if (translatePending) FinishTranslateCancel($"pose changed to '{captureGestureName}'");
+                // Translate -> Capture morph: suppress both the Translate
+                // deactivation cue and the Capture activation cue so the
+                // handoff doesn't double-beep. Only silent when Capture will
+                // actually take over (not rearm-blocked); a cancel that leads
+                // nowhere still gets its deactivation sound.
+                bool silentHandoff = silentTranslateToCaptureHandoff
+                    && translatePending && !cameraPending && !cameraRearmRequired;
+                if (translatePending) FinishTranslateCancel($"pose changed to '{captureGestureName}'", silentHandoff);
                 if (!cameraPending)
                 {
-                    if (!cameraRearmRequired) EnterCameraPending();
+                    if (!cameraRearmRequired) EnterCameraPending(silentHandoff);
                 }
                 else
                 {
@@ -607,16 +616,16 @@ public class GestureRouter : MonoBehaviour
     }
 
     // Capture Manager
-    void EnterCameraPending()
+    void EnterCameraPending(bool silent = false)
     {
         cameraPending = true;
         _cameraEnterTime = Time.time;
         cameraHeldElapsed = 0f;
         _nextCameraHoldLogTime = Time.time + cameraHoldLogIntervalSeconds;
         lastRecognized = "";
-        Debug.Log($"[Study Log][GestureRouter] {captureGestureName} pose detected");
+        Debug.Log($"[Study Log][GestureRouter] {captureGestureName} pose detected{(silent ? " (silent handoff)" : "")}");
         SendEvent(captureGestureName, "START");
-        PlayFeedback(activationClip);
+        if (!silent) PlayFeedback(activationClip);
         try { OnCaptureStarted?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
 
@@ -691,13 +700,13 @@ public class GestureRouter : MonoBehaviour
         try { OnCaptureRecognized?.Invoke(translateGestureName); } catch (Exception e) { Debug.LogError(e); }
     }
 
-    void FinishTranslateCancel(string reason)
+    void FinishTranslateCancel(string reason, bool silent = false)
     {
         translatePending = false;
         translateRearmRequired = true;
-        Debug.Log($"[Study Log][GestureRouter] REJECT: '{translateGestureName}', {reason}");
+        Debug.Log($"[Study Log][GestureRouter] REJECT: '{translateGestureName}', {reason}{(silent ? " (silent handoff)" : "")}");
         SendEvent(translateGestureName, "FAIL");
-        PlayFeedback(deactivationClip);
+        if (!silent) PlayFeedback(deactivationClip);
         ConsumeRightPinchIfActive();
         try { OnCaptureRejected?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }

@@ -18,6 +18,15 @@ Plus 3 control packets bracketing a hold:
   CANCEL,seq,t,dotIdx       -- sent if they release before completion
   COMPLETE,seq,t,dotIdx     -- sent at the 1-second mark
 
+And 3 packets for the post-calibration random saccadic evaluation task
+(SaccadicTaskController). u/v are the fixation position normalized to the
+calibration grid extent (u: 0=left col .. 1=right col, v: 0=top row .. 1=
+bottom row) so the Python side can interpolate the expected on-screen point
+from the known 9-dot norm targets:
+  SACCADE_BEGIN,seq,t,numFixations
+  SACCADE_FIX,seq,t,fixIndex,u,v
+  SACCADE_END,seq,t,numShown
+
 Note: this stream is independent of MsgSender. CalibrationScene should NOT
 have a MsgSender in the scene, otherwise both will spam GAZE packets in
 parallel.
@@ -92,6 +101,39 @@ public class CalibSender : MonoBehaviour
         SendControlPacket("COMPLETE", dotIndex);
         isCalibrationHoldActive = false;
         activeCalibrationDotIndex = -1;
+    }
+
+    // ---------- Saccadic evaluation task (called from SaccadicTaskController) ----------
+
+    public void SendSaccadeBegin(int numFixations)
+    {
+        Debug.Log($"[CalibSender] SACCADE_BEGIN fixations={numFixations}");
+        SendSimplePacket("SACCADE_BEGIN", numFixations.ToString(CultureInfo.InvariantCulture));
+    }
+
+    public void SendSaccadeFixation(int fixIndex, float u, float v)
+    {
+        SendSimplePacket("SACCADE_FIX",
+            fixIndex.ToString(CultureInfo.InvariantCulture),
+            u.ToString("F4", CultureInfo.InvariantCulture),
+            v.ToString("F4", CultureInfo.InvariantCulture));
+    }
+
+    public void SendSaccadeEnd(int numShown)
+    {
+        Debug.Log($"[CalibSender] SACCADE_END shown={numShown}");
+        SendSimplePacket("SACCADE_END", numShown.ToString(CultureInfo.InvariantCulture));
+    }
+
+    void SendSimplePacket(string eventType, params string[] fields)
+    {
+        string msg = string.Join(",",
+            eventType,
+            seq.ToString(CultureInfo.InvariantCulture),
+            Time.unscaledTime.ToString("F4", CultureInfo.InvariantCulture));
+        if (fields.Length > 0) msg = msg + "," + string.Join(",", fields);
+        seq++;
+        SendPacket(msg);
     }
 
     // ---------- Per-frame stream ----------

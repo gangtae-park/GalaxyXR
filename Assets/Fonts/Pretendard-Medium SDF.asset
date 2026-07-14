@@ -1184,6 +1184,14 @@ MonoBehaviour:
       m_LigatureGlyphID: 13688
     - m_ComponentGlyphIDs: 3100000006370000
       m_LigatureGlyphID: 13552
+    - m_ComponentGlyphIDs: cb320000c932000005370000
+      m_LigatureGlyphID: 13052
+    - m_ComponentGlyphIDs: cb320000c932000006370000
+      m_LigatureGlyphID: 14579
+    - m_ComponentGlyphIDs: cb32000005370000
+      m_LigatureGlyphID: 13034
+    - m_ComponentGlyphIDs: cb32000006370000
+      m_LigatureGlyphID: 14533
     m_GlyphPairAdjustmentRecords:
     - m_FirstAdjustmentRecord:
         m_GlyphIndex: 3
@@ -195526,6 +195534,36 @@ MonoBehaviour:
           m_YAdvance: 0
       m_FeatureLookupFlags: 1
     - m_FirstAdjustmentRecord:
+        m_GlyphIndex: 13003
+        m_GlyphValueRecord:
+          m_XPlacement: 0
+          m_YPlacement: 0
+          m_XAdvance: -1.3623047
+          m_YAdvance: 0
+      m_SecondAdjustmentRecord:
+        m_GlyphIndex: 13005
+        m_GlyphValueRecord:
+          m_XPlacement: 0
+          m_YPlacement: 0
+          m_XAdvance: 0
+          m_YAdvance: 0
+      m_FeatureLookupFlags: 0
+    - m_FirstAdjustmentRecord:
+        m_GlyphIndex: 13003
+        m_GlyphValueRecord:
+          m_XPlacement: 0
+          m_YPlacement: 0
+          m_XAdvance: -1.3623047
+          m_YAdvance: 0
+      m_SecondAdjustmentRecord:
+        m_GlyphIndex: 14374
+        m_GlyphValueRecord:
+          m_XPlacement: 0
+          m_YPlacement: 0
+          m_XAdvance: 0
+          m_YAdvance: 0
+      m_FeatureLookupFlags: 1
+    - m_FirstAdjustmentRecord:
         m_GlyphIndex: 13145
         m_GlyphValueRecord:
           m_XPlacement: 0
@@ -227707,6 +227745,14 @@ MonoBehaviour:
       m_MarkPositionAdjustment:
         m_XPositionAdjustment: -25.40039
         m_YPositionAdjustment: 55.722656
+    - m_BaseGlyphID: 13003
+      m_BaseGlyphAnchorPoint:
+        m_XCoordinate: 36.5625
+        m_YCoordinate: 33.310547
+      m_MarkGlyphID: 14142
+      m_MarkPositionAdjustment:
+        m_XPositionAdjustment: -26.850586
+        m_YPositionAdjustment: 23.203125
     m_MarkToMarkAdjustmentRecords: []
   m_ShouldReimportFontFeatures: 0
   m_FallbackFontAssetTable: []

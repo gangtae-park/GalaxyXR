@@ -7510,7 +7510,7 @@ MonoBehaviour:
   pullToward: 0.05
   minCameraDistance: 0.4
   gestureNameFilters:
-  - Search/Find Info
+  - Search
   - Translate
   replacePreviousCard: 1
   verboseLogging: 1
