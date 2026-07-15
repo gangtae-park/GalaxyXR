@@ -29,6 +29,10 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
     [SerializeField] bool constantSizeFloorAtAuthored = true;
     [SerializeField, Range(1f, 10f)] float constantSizeMaxMultiplier = 4.0f;
     
+    [Header("Gaze-pinch selection")]
+    [Tooltip("Auto-attach a GazePinchUiSelector so bubbles and the radial menu can be selected by LOOKING at them and pinching (right hand), in addition to ray/poke.")]
+    [SerializeField] bool enableGazePinchSelection = true;
+
     [Header("Optional depth / raycast placement")]
     public bool usePhysicsRaycastPlacement = false;
     public LayerMask raycastMask = ~0;
@@ -65,6 +69,13 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
     {
         get => referenceCamera;
         set => referenceCamera = value;
+    }
+
+    void Awake()
+    {
+        // Attach the gaze-pinch selector at scene start (not only on first
+        // ShowBubbles) so it is armed and logging from the beginning.
+        ResolveReferences();
     }
 
     public static ObjectDetectionBubbleSpawner CreateRuntimeDefault(
@@ -390,6 +401,8 @@ public class ObjectDetectionBubbleSpawner : MonoBehaviour
 
     void ResolveReferences()
     {
+        if (enableGazePinchSelection && GetComponent<GazePinchUiSelector>() == null)
+            gameObject.AddComponent<GazePinchUiSelector>();
         if (referenceCamera == null) referenceCamera = Camera.main;
         if (radialMenuSpawner == null) radialMenuSpawner = FindObjectOfType<ObjectActionRadialMenuSpawner>();
         if (radialMenuSpawner == null)

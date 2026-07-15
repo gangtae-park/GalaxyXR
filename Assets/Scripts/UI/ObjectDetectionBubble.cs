@@ -51,6 +51,65 @@ public class ObjectDetectionBubble : MonoBehaviour, IPointerClickHandler
         set => referenceCamera = value;
     }
 
+    /// <summary>Detection this bubble represents (used by the gaze-pinch selector).</summary>
+    public DetectionResult Detection => detection;
+
+    // -------- Hover feedback (gaze + XR ray) --------
+    // The bubble grows while ANY hover source is active. Scale rides through
+    // DistanceConstantSize.externalMultiplier when present so the two systems
+    // don't fight over localScale; plain transforms are scaled directly.
+    [Tooltip("Scale multiplier while hovered by gaze or the hand ray.")]
+    public float hoverScaleMultiplier = 1.35f;
+
+    bool _gazeHover;
+    bool _rayHover;
+    bool _hoverVisualOn;
+    Vector3 _hoverBaseScale;
+    bool _hoverBaseCaptured;
+
+    public void SetGazeHovered(bool on)
+    {
+        if (_gazeHover == on) return;
+        _gazeHover = on;
+        ApplyHoverVisual();
+    }
+
+    void SetRayHovered(bool on)
+    {
+        if (_rayHover == on) return;
+        _rayHover = on;
+        ApplyHoverVisual();
+    }
+
+    void ApplyHoverVisual()
+    {
+        bool on = _gazeHover || _rayHover;
+        if (on == _hoverVisualOn) return;
+        _hoverVisualOn = on;
+
+        DistanceConstantSize sizer = GetComponent<DistanceConstantSize>();
+        if (sizer != null)
+        {
+            sizer.externalMultiplier = on ? hoverScaleMultiplier : 1f;
+            return;
+        }
+        if (!_hoverBaseCaptured)
+        {
+            _hoverBaseScale = transform.localScale;
+            _hoverBaseCaptured = true;
+        }
+        transform.localScale = _hoverBaseScale * (on ? hoverScaleMultiplier : 1f);
+    }
+
+    /// <summary>Entry point for the gaze-pinch selector -- same path as a
+    /// pointer/XR click.</summary>
+    public void ClickFromGaze()
+    {
+        if (verboseLogging)
+            Debug.Log($"[OBJECT_BUBBLE] gaze-pinch click label={(detection != null ? detection.label : "?")}");
+        HandleClick();
+    }
+
     public void Initialize(
         DetectionResult detection,
         VlmResultReceiver.VlmResultPayload payload,
@@ -80,10 +139,32 @@ public class ObjectDetectionBubble : MonoBehaviour, IPointerClickHandler
             try { _xrRemoveMethod.Invoke(_xrUnityEvent, new object[] { _xrDelegate }); }
             catch { /* toolkit may have torn down already; ignore */ }
         }
+        for (int i = 0; i < _auxHooks.Count; i++)
+        {
+            var (evt, remove, del) = _auxHooks[i];
+            if (evt == null || remove == null || del == null) continue;
+            try { remove.Invoke(evt, new object[] { del }); } catch { }
+        }
+        _auxHooks.Clear();
     }
+
+    // One physical pinch can arrive through several click paths at once
+    // (gaze-pinch selector, XRI selectEntered, EventSystem pointer click).
+    // Without this gate the duplicates toggle the menu open->closed within a
+    // frame, which looked like "clicks don't work".
+    float _lastClickTime = -999f;
+    const float ClickDebounceSeconds = 0.4f;
 
     void HandleClick()
     {
+        if (Time.unscaledTime - _lastClickTime < ClickDebounceSeconds)
+        {
+            if (verboseLogging)
+                Debug.Log("[OBJECT_BUBBLE] duplicate click within debounce window ignored.");
+            return;
+        }
+        _lastClickTime = Time.unscaledTime;
+
         string label = detection != null ? detection.label : "";
         Vector3 worldPos = transform.position;
         Debug.Log($"[OBJECT_BUBBLE] clicked label={label} request_id={requestId} world=({worldPos.x:F3},{worldPos.y:F3},{worldPos.z:F3})");
@@ -180,7 +261,49 @@ public class ObjectDetectionBubble : MonoBehaviour, IPointerClickHandler
         _xrDelegate = typedDelegate;
 
         Debug.Log("[OBJECT_BUBBLE] hooked XRSimpleInteractable.selectEntered (pinch / XR select will fire click).");
+
+        // Hover feedback: same reflection dance for hoverEntered / hoverExited
+        // so the hand-ray hover grows the bubble like gaze hover does.
+        HookAuxEvent(comp, type, "hoverEntered", nameof(XrHoverEnterStub));
+        HookAuxEvent(comp, type, "hoverExited", nameof(XrHoverExitStub));
     }
+
+    // Bookkeeping for the extra hover subscriptions.
+    readonly System.Collections.Generic.List<(object evt, MethodInfo remove, Delegate del)> _auxHooks
+        = new System.Collections.Generic.List<(object, MethodInfo, Delegate)>();
+
+    void HookAuxEvent(Component comp, Type type, string memberName, string stubName)
+    {
+        object unityEvent = null;
+        PropertyInfo prop = type.GetProperty(memberName, BindingFlags.Public | BindingFlags.Instance);
+        if (prop != null) unityEvent = prop.GetValue(comp);
+        if (unityEvent == null)
+        {
+            FieldInfo fld = type.GetField(memberName, BindingFlags.Public | BindingFlags.Instance);
+            if (fld != null) unityEvent = fld.GetValue(comp);
+        }
+        if (unityEvent == null) return;
+
+        Type eventType = unityEvent.GetType();
+        MethodInfo addMethod = eventType.GetMethod("AddListener");
+        MethodInfo removeMethod = eventType.GetMethod("RemoveListener");
+        if (addMethod == null) return;
+        Type listenerType = addMethod.GetParameters()[0].ParameterType;
+        if (!listenerType.IsGenericType) return;
+        Type argType = listenerType.GetGenericArguments()[0];
+
+        MethodInfo genericStub = typeof(ObjectDetectionBubble).GetMethod(
+            stubName, BindingFlags.Instance | BindingFlags.NonPublic);
+        if (genericStub == null) return;
+        Delegate del;
+        try { del = Delegate.CreateDelegate(listenerType, this, genericStub.MakeGenericMethod(argType)); }
+        catch { return; }
+        addMethod.Invoke(unityEvent, new object[] { del });
+        _auxHooks.Add((unityEvent, removeMethod, del));
+    }
+
+    void XrHoverEnterStub<T>(T args) { SetRayHovered(true); }
+    void XrHoverExitStub<T>(T args) { SetRayHovered(false); }
 
     // Generic stub invoked by reflection. The exact T is bound at runtime to
     // SelectEnterEventArgs via MakeGenericMethod. We don't need the args

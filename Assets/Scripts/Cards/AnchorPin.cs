@@ -67,6 +67,21 @@ public class AnchorPin : MonoBehaviour
         _holdRoutine = StartCoroutine(HoldToDelete());
     }
 
+    /// <summary>Gaze-pinch entry points (no XRI interactor involved): begin
+    /// the same hold-to-delete on pinch down, cancel/restore on release.</summary>
+    public void BeginGazeHold()
+    {
+        CancelHold();
+        _holdRoutine = StartCoroutine(HoldToDelete());
+    }
+
+    public void EndGazeHold()
+    {
+        CancelHold();
+        transform.localScale = _initialScale;
+        RestoreColors();
+    }
+
     private void OnSelectExited(SelectExitEventArgs args)
     {
         CancelHold();

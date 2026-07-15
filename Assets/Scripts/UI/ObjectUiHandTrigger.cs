@@ -18,6 +18,8 @@ public class ObjectUiHandTrigger : MonoBehaviour
     [Header("Refs")]
     public ObjectUiRequestManager requestManager;
     public InputModeManager modeManager;
+    [Tooltip("Optional. When set (or auto-found), the router's activation clip plays the moment the long pinch is recognised -- same cue as gesture starts.")]
+    public GestureRouter feedbackRouter;
 
     [Header("Optional Input Action")]
     [Tooltip("Optional override. If empty, this component listens for a left-hand pinch/select value.")]
@@ -89,6 +91,7 @@ public class ObjectUiHandTrigger : MonoBehaviour
             return;
         }
         if (verboseLogging) Debug.Log("[ObjectUiHandTrigger] left-hand pinch hold detected; firing ObjectUI request.");
+        if (feedbackRouter != null) feedbackRouter.PlayActivationCue();
         requestManager.BeginObjectUiRequest();
     }
 
@@ -123,6 +126,7 @@ public class ObjectUiHandTrigger : MonoBehaviour
     {
         if (requestManager == null) requestManager = FindObjectOfType<ObjectUiRequestManager>();
         if (modeManager == null) modeManager = FindObjectOfType<InputModeManager>();
+        if (feedbackRouter == null) feedbackRouter = FindObjectOfType<GestureRouter>();
     }
 
     void ResetHold()

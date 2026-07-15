@@ -666,8 +666,8 @@ MonoBehaviour:
   recognizer: {fileID: 136429831}
   msgSender: {fileID: 1110963236}
   inputModeManager: {fileID: 6614100000000000002}
-  minFrameInterval: 0.03
-  minFramesForRecognition: 15
+  minFrameInterval: 0.033
+  minFramesForRecognition: 10
   pendingReferentName: Pending
   leftPinchAction: {fileID: -6131295136447488360, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   rightIndexTip: {fileID: 5534409079552104258}
@@ -687,7 +687,7 @@ MonoBehaviour:
   saveGestureName: Save
   saveEntryHoldTimeoutSeconds: 2
   captureGestureName: Capture
-  cameraHoldSeconds: 1.2
+  cameraHoldSeconds: 1
   translateGestureName: Translate
   verboseCameraHoldLogging: 0
   cameraHoldLogIntervalSeconds: 0.5
@@ -6983,12 +6983,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MsgSender
   networkSettings: {fileID: 11400000, guid: e94b28fd7ac351b2a86ef92c1a4d5e6f, type: 2}
-  serverIP: 192.168.0.8
-  port: 5005
   eyeGazeReader: {fileID: 198504609}
   gazeRotationAction: {fileID: -5930349909990434036, guid: c348712bda248c246b8c49b3db54643f, type: 3}
   gazeTrackingStateAction: {fileID: 2069149553511882089, guid: c348712bda248c246b8c49b3db54643f, type: 3}
-  sendHz: 30
+  sendHz: 60
   captureContextRegistry: {fileID: 0}
   autoResolveCaptureContextRegistry: 1
   registerCaptureContextOnGestureEvents: 1
@@ -7025,11 +7023,11 @@ MonoBehaviour:
   maxAnchors: 0
   gazeProjectionDistance: 0.8
   objectDepthScale: 0.5
-  groupAHorizontalOffset: 0.12
-  groupAVerticalOffset: 0.08
-  groupAPullTowardUser: 0.15
+  groupAHorizontalOffset: 0.3
+  groupAVerticalOffset: 0.3
+  groupAPullTowardUser: 0
   groupBPullTowardUser: 0
-  anchorAboveOffset: 0.12
+  anchorAboveOffset: 0.2
   enforceConstantApparentSize: 1
   constantSizeReferenceDistance: 1.2
   constantSizeFloorAtAuthored: 1
@@ -7048,7 +7046,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7aa8660007f14d1eb97b240562466e66, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VlmResultReceiver
-  port: 5006
+  networkSettings: {fileID: 0}
   verboseLogging: 1
   enableObjectActionMenu: 1
   autoCreateObjectActionMenuSpawner: 1
@@ -14357,7 +14355,7 @@ MonoBehaviour:
   - {fileID: 198504609}
   keepGazeEnabledInGestureOnly: 1
   keepGazeEnabledInVoiceOnly: 1
-  keepGazeEnabledInUIOnly: 0
+  keepGazeEnabledInUIOnly: 1
   objectUiRequestManager: {fileID: 1110963240}
   startObjectUiRequestOnUIOnly: 0
   interactionLogger: {fileID: 6614100000000000004}

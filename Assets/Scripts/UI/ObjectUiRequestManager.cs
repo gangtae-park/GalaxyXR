@@ -470,8 +470,8 @@ public class ObjectUiRequestManager : MonoBehaviour
         if (!string.IsNullOrWhiteSpace(objectUiServerUrl))
             return objectUiServerUrl;
         // 3) Last-ditch: reuse MsgSender's serverIP with the default port/path.
-        string host = msgSender != null && !string.IsNullOrWhiteSpace(msgSender.serverIP)
-            ? msgSender.serverIP
+        string host = msgSender != null && !string.IsNullOrWhiteSpace(msgSender.ServerIP)
+            ? msgSender.ServerIP
             : "192.168.0.3";
         return $"http://{host}:5007/object_ui";
     }

@@ -43,6 +43,14 @@ public class StickyNote : MonoBehaviour
         ObjectId = objectId ?? "";
     }
 
+    /// <summary>Gaze-pinch entry: same effect as an XRI select.</summary>
+    public void PinchFromGaze()
+    {
+        if (verboseLogging)
+            Debug.Log($"[StickyNote] pinched via gaze (noteId={NoteId})");
+        try { OnPinched?.Invoke(this); } catch (Exception e) { Debug.LogError(e); }
+    }
+
     private void OnSelectEntered(SelectEnterEventArgs args)
     {
         if (verboseLogging)
