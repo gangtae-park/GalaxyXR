@@ -499,8 +499,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 29c94671ee0e4485cb71b54524fc0984, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CalibSender
-  serverIP: 192.168.0.199
-  port: 5005
+  networkSettings: {fileID: 0}
   eyeGazeReader: {fileID: 1234129721}
   sendHz: 30
   verboseLogging: 0
@@ -523,9 +522,10 @@ MonoBehaviour:
   horizontalSpacing: 0.25
   verticalSpacing: 0.25
   gridOffset: {x: 0, y: -0.05, z: 0}
-  nextSceneName: DataCollectionScene
+  nextSceneName: GazeGestureScene
   nextSceneDelaySeconds: 1
   saccadicTask: {fileID: 1619092852}
+  runSaccadicEvaluation: 0
 --- !u!114 &1619092850
 MonoBehaviour:
   m_ObjectHideFlags: 0

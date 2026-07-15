@@ -229,6 +229,7 @@ public class GestureRouter : MonoBehaviour
                     string blockedBy = null;
                     if (IsPinchOverUi()) blockedBy = "UI";
                     else if (IsPinchOverXrInteractable()) blockedBy = "XR interactable";
+                    else if (IsGazeOverInteractive()) blockedBy = "gaze over UI/card";
                     if (blockedBy != null)
                     {
                         if (logUiSuppression)
@@ -382,6 +383,9 @@ public class GestureRouter : MonoBehaviour
         // adds no gaze points. END is deliberately withheld until FinishCompareMatch
         // so the compare.handle handler doesn't run before the hands actually meet.
         SendEvent(compareGestureName, "READY");
+        // Left-pinch confirmation cue: the second hand arming Compare deserves
+        // the same activation feedback as any gesture start.
+        PlayFeedback(activationClip);
         try { OnCompareReady?.Invoke(); } catch (Exception e) { Debug.LogError(e); }
     }
 
@@ -835,6 +839,36 @@ public class GestureRouter : MonoBehaviour
             feedbackAudioSource.playOnAwake = false;
             feedbackAudioSource.spatialBlend = 0f;
         }
+    }
+
+    /// <summary>Public wrappers so triggers OUTSIDE the router (e.g. the
+    /// left-hand ObjectUI long pinch, gaze-pinch UI selection) can reuse the
+    /// same feedback clips and AudioSource.</summary>
+    public void PlayActivationCue() { PlayFeedback(activationClip); }
+    public void PlayDeactivationCue() { PlayFeedback(deactivationClip); }
+
+    /// <summary>True when the pinch would land on interactive content via the
+    /// XR ray / UI pointer pipelines. GazePinchUiSelector uses this to yield
+    /// to the ray click instead of double-firing on the same pinch.</summary>
+    public bool IsPinchTargetingInteractive()
+    {
+        return IsPinchOverUi() || IsPinchOverXrInteractable();
+    }
+
+    // The gaze-pinch selector consumes pinches aimed BY GAZE at cards /
+    // bubbles / menus -- the ray-based checks above can't see those, so
+    // without this a gaze click on a card button would also start a phantom
+    // Jackknife capture.
+    GazePinchUiSelector _gazeUiSelector;
+
+    bool IsGazeOverInteractive()
+    {
+        if (_gazeUiSelector == null)
+        {
+            _gazeUiSelector = FindObjectOfType<GazePinchUiSelector>();
+            if (_gazeUiSelector == null) return false;
+        }
+        return _gazeUiSelector.isActiveAndEnabled && _gazeUiSelector.IsGazeOverInteractiveNow();
     }
 
     void PlayFeedback(AudioClip clip)

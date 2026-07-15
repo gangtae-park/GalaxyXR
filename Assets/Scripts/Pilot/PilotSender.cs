@@ -49,11 +49,10 @@ public class PilotSender : MonoBehaviour
     public static PilotSender Instance { get; private set; }
 
     [Header("Network")]
-    [Tooltip("Optional. When assigned (or when Resources/NetworkSettings.asset exists), serverIP/port below are overridden by the shared asset.")]
+    [Tooltip("Optional explicit asset; when null, Resources/NetworkSettings.asset is used. The Mac address and port come ONLY from NetworkSettings.")]
     public NetworkSettings networkSettings;
-    [Tooltip("Mac IP that hosts pilot_receiver.py.")]
-    public string serverIP = "192.168.0.8";
-    public int port = 5005;
+    private string serverIP = "192.168.0.8";
+    private int port = 5005;
 
     [Header("Refs")]
     public EyeGazeReader eyeGazeReader;
@@ -111,7 +110,11 @@ public class PilotSender : MonoBehaviour
     void ApplyNetworkSettings()
     {
         NetworkSettings settings = networkSettings != null ? networkSettings : NetworkSettings.Instance;
-        if (settings == null) return;
+        if (settings == null)
+        {
+            Debug.LogWarning($"[PilotSender] NetworkSettings asset missing -- falling back to built-in default {serverIP}:{port}. Create Resources/NetworkSettings.asset.");
+            return;
+        }
         if (!string.IsNullOrEmpty(settings.serverIP)) serverIP = settings.serverIP;
         if (settings.commandUdpPort > 0) port = settings.commandUdpPort;
         Debug.Log($"[PilotSender] Network config from NetworkSettings: {serverIP}:{port}");

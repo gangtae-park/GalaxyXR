@@ -133,7 +133,7 @@ public class ResultCardSpawner : MonoBehaviour
             receiver.OnStreamDelta += HandleStreamDelta;
             receiver.OnStreamEnd += HandleStreamEnd;
         }
-        if (gestureRouter != null) gestureRouter.OnCaptureRecognized += HandleGestureRecognized;
+        if (gestureRouter != null) gestureRouter.OnCaptureStarted += HandleGestureStarted;
     }
 
     void OnDisable()
@@ -144,14 +144,18 @@ public class ResultCardSpawner : MonoBehaviour
             receiver.OnStreamDelta -= HandleStreamDelta;
             receiver.OnStreamEnd -= HandleStreamEnd;
         }
-        if (gestureRouter != null) gestureRouter.OnCaptureRecognized -= HandleGestureRecognized;
+        if (gestureRouter != null) gestureRouter.OnCaptureStarted -= HandleGestureStarted;
     }
 
-    // ---------- gaze snapshot at gesture END ----------
+    // ---------- gaze snapshot at gesture START ----------
+    // The Mac side now targets on the frame frozen at gesture START and sends
+    // the anchor direction/depth in THAT camera's frame, so the world-space
+    // reconstruction must use the START-time camera pose. Unity's pose at the
+    // START event equals the reference pose Python uses (no adb lag locally).
 
-    void HandleGestureRecognized(string gestureName)
+    void HandleGestureStarted()
     {
-        CaptureCurrentGazeSnapshot($"gesture END '{gestureName}'");
+        CaptureCurrentGazeSnapshot("gesture START");
     }
 
     public void CaptureCurrentGazeSnapshot(string reason)
@@ -269,7 +273,7 @@ public class ResultCardSpawner : MonoBehaviour
             return objectPos;
 
         // Capture-time right/up so the offset is "frozen" at the user's head pose
-        // at gesture END, rather than tracking the user as they move.
+        // at gesture START, rather than tracking the user as they move.
         Vector3 rightDir = _lastGazeSnapshot.cameraRot * Vector3.right;
         Vector3 upDir = _lastGazeSnapshot.cameraRot * Vector3.up;
         Vector3 towardUser = -_lastGazeSnapshot.gazeDirWorld.normalized;

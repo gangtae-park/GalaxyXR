@@ -18,6 +18,8 @@ public class ObjectActionRadialMenuSpawner : MonoBehaviour
     public bool replaceExistingMenu = true;
 
     [Header("Placement")]
+    [Tooltip("When ON (default) the menu faces the camera once at spawn and stays FIXED -- head tilt no longer rotates it. Turn OFF to restore the old per-frame billboard behaviour.")]
+    public bool freezeOrientationAtSpawn = true;
     public float cameraForwardOffset = 0.15f;
     public float menuScale = 0.0012f;
     public float menuLifetimeSeconds = 20f;
@@ -35,8 +37,13 @@ public class ObjectActionRadialMenuSpawner : MonoBehaviour
     public bool verboseLogging = true;
 
     GameObject _currentMenuRoot;
+    ObjectActionRadialMenu _currentMenu;
     DetectedObjectAnchor _currentAnchor;
     float _destroyAt;
+
+    /// <summary>The menu currently on screen (null when closed). Used by the
+    /// gaze-pinch selector to hit-test wedges geometrically.</summary>
+    public ObjectActionRadialMenu CurrentMenu => _currentMenuRoot != null ? _currentMenu : null;
 
     void Awake()
     {
@@ -218,9 +225,23 @@ public class ObjectActionRadialMenuSpawner : MonoBehaviour
         group.interactable = true;
         group.blocksRaycasts = true;
 
-        CanvasBillboard billboard = root.AddComponent<CanvasBillboard>();
-        billboard.referenceCamera = cam;
-        billboard.lockUpright = false;
+        if (freezeOrientationAtSpawn)
+        {
+            // Face the camera ONCE, with world up so the menu spawns level
+            // regardless of head tilt, then never rotate again.
+            if (cam != null)
+            {
+                Vector3 toMenu = position - cam.transform.position;
+                if (toMenu.sqrMagnitude > 1e-6f)
+                    root.transform.rotation = Quaternion.LookRotation(toMenu.normalized, Vector3.up);
+            }
+        }
+        else
+        {
+            CanvasBillboard billboard = root.AddComponent<CanvasBillboard>();
+            billboard.referenceCamera = cam;
+            billboard.lockUpright = false;
+        }
 
         if (enforceConstantApparentSize)
         {
@@ -258,6 +279,7 @@ public class ObjectActionRadialMenuSpawner : MonoBehaviour
         AddObjectLabel(root.transform, anchor);
 
         _currentMenuRoot = root;
+        _currentMenu = menu;
         _currentAnchor = anchor;
         _destroyAt = Time.time + menuLifetimeSeconds;
 
@@ -304,6 +326,7 @@ public class ObjectActionRadialMenuSpawner : MonoBehaviour
         {
             Destroy(_currentMenuRoot);
             _currentMenuRoot = null;
+            _currentMenu = null;
             _currentAnchor = null;
         }
     }

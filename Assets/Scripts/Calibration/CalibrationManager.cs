@@ -29,6 +29,8 @@ public class CalibrationManager : MonoBehaviour
     public float nextSceneDelaySeconds = 1.0f;
     [Tooltip("Optional. When assigned, the 9-dot calibration hands off to the random saccadic evaluation task instead of loading the next scene directly; the task loads the next scene when it finishes.")]
     public SaccadicTaskController saccadicTask;
+    [Tooltip("Session switch: run the saccadic accuracy evaluation after the 9-dot calibration? Turn OFF to skip straight to the next scene even when saccadicTask is assigned (not every session needs an evaluation). The ridge model on the Mac side is already fitted the moment dot 9 completes, so skipping loses nothing but the accuracy measurement.")]
+    public bool runSaccadicEvaluation = true;
 
     private readonly List<GameObject> dots = new List<GameObject>();
     private int currentIndex = 0;
@@ -110,7 +112,7 @@ public class CalibrationManager : MonoBehaviour
         {
             ShowNextDot();
         }
-        else if (saccadicTask != null)
+        else if (saccadicTask != null && runSaccadicEvaluation)
         {
             Debug.Log("[CalibrationManager] Calibration complete -- starting saccadic evaluation.");
             Invoke(nameof(StartSaccadicEvaluation), nextSceneDelaySeconds);

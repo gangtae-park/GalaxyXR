@@ -37,9 +37,10 @@ public class CalibSender : MonoBehaviour
     public static CalibSender Instance { get; private set; }
 
     [Header("Network")]
-    [Tooltip("Mac IP that hosts the Python calibration receiver.")]
-    public string serverIP = "192.168.0.8";
-    public int port = 5005;
+    [Tooltip("Optional explicit asset; when null, Resources/NetworkSettings.asset is used. The Mac address and port come ONLY from NetworkSettings.")]
+    public NetworkSettings networkSettings;
+    private string serverIP = "192.168.0.8";
+    private int port = 5005;
 
     [Header("Refs")]
     public EyeGazeReader eyeGazeReader;
@@ -64,7 +65,21 @@ public class CalibSender : MonoBehaviour
 
     void Start()
     {
+        ApplyNetworkSettings();
         if (client == null) client = new UdpClient();
+    }
+
+    void ApplyNetworkSettings()
+    {
+        NetworkSettings settings = networkSettings != null ? networkSettings : NetworkSettings.Instance;
+        if (settings == null)
+        {
+            Debug.LogWarning($"[CalibSender] NetworkSettings asset missing -- falling back to built-in default {serverIP}:{port}. Create Resources/NetworkSettings.asset.");
+            return;
+        }
+        if (!string.IsNullOrEmpty(settings.serverIP)) serverIP = settings.serverIP;
+        if (settings.commandUdpPort > 0) port = settings.commandUdpPort;
+        Debug.Log($"[CalibSender] Network config from NetworkSettings: {serverIP}:{port}");
     }
 
     void OnDestroy()

@@ -5,6 +5,10 @@ public class EyeGazeReader : MonoBehaviour
 {
     public bool LatestIsTracked { get; private set; } = false;
     public Vector3 LatestGazeDirection { get; private set; } = Vector3.zero;
+    // World-space head (camera) rotation sampled in the same Update as the
+    // gaze, so a receiver can rebuild the world gaze ray from the camera-local
+    // direction and compensate head motion. Updated even when gaze is lost.
+    public Quaternion LatestHeadRotation { get; private set; } = Quaternion.identity;
 
     [Header("Assign from Input Actions")]
     public InputActionReference gazeRotationAction;
@@ -51,6 +55,7 @@ public class EyeGazeReader : MonoBehaviour
 
         Transform cam = Camera.main != null ? Camera.main.transform : null;
         if (cam == null) return;
+        LatestHeadRotation = cam.rotation;
 
         Quaternion gazeRot = gazeRotationAction.action.ReadValue<Quaternion>();
         Vector3 gazeDir = (gazeRot * Vector3.forward).normalized;

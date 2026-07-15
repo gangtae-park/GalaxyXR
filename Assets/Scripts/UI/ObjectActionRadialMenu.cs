@@ -37,7 +37,7 @@ public class ObjectActionRadialMenu : MonoBehaviour
     public float innerRadius = 54f;
     // Semi-transparent black to match the other card prefabs.
     public Color segmentColor = new Color(0.04f, 0.04f, 0.06f, 0.78f);
-    public Color segmentHoverColor = new Color(0.10f, 0.10f, 0.14f, 0.92f);
+    public Color segmentHoverColor = new Color(0.22f, 0.27f, 0.42f, 0.95f);
     public Color segmentPressedColor = new Color(0.00f, 0.00f, 0.00f, 0.96f);
     public Color dividerColor = new Color(0.85f, 0.88f, 0.95f, 0.55f);
     public Color labelColor = Color.white;
@@ -51,9 +51,80 @@ public class ObjectActionRadialMenu : MonoBehaviour
 
     public event Action<ObjectActionMenuAction> OnActionClicked;
 
+    // One pinch can fire both the gaze-pinch path and a Button click; only
+    // the first within the window is routed.
+    float _lastActionTime = -999f;
+    const float ActionDebounceSeconds = 0.4f;
+
+    bool ConsumeActionGate()
+    {
+        if (Time.unscaledTime - _lastActionTime < ActionDebounceSeconds) return false;
+        _lastActionTime = Time.unscaledTime;
+        return true;
+    }
+
+    /// <summary>Geometric wedge hit-test for gaze-pinch selection: `local` is
+    /// a point in this canvas's LOCAL units (radius/innerRadius space, i.e.
+    /// transform.InverseTransformPoint of a world point on the menu plane).
+    /// Mirrors RadialMenuSegmentGraphic's clockwise layout: wedge i spans
+    /// ((i-1)*sweep, i*sweep] with its centre at i*sweep - sweep/2.</summary>
+    public bool TryGetActionAtLocalPoint(Vector2 local, out ObjectActionMenuAction action)
+    {
+        action = ObjectActionMenuAction.Cancel;
+        if (!TryGetIndexAtLocalPoint(local, out int index)) return false;
+        action = Actions[index];
+        return true;
+    }
+
+    public bool TryGetIndexAtLocalPoint(Vector2 local, out int index)
+    {
+        index = -1;
+        float r = local.magnitude;
+        if (r < innerRadius || r > radius * 1.15f) return false;
+
+        float sweep = 360f / Actions.Length;
+        float theta = Mathf.Repeat(Mathf.Atan2(local.y, local.x) * Mathf.Rad2Deg, 360f);
+        index = Mathf.CeilToInt(theta / sweep) % Actions.Length;
+        return true;
+    }
+
+    // -------- Gaze hover highlight --------
+    // The Button ColorBlock only reacts to EventSystem pointers (hand ray);
+    // the gaze path bypasses it, so the hovered wedge is tinted directly on
+    // its graphic. Both feedbacks can coexist (canvasRenderer tint multiplies
+    // over graphic.color).
+    RadialMenuSegmentGraphic[] _segmentGraphics;
+    int _gazeHoverIndex = -1;
+
+    public void SetGazeHoverIndex(int index)
+    {
+        if (_segmentGraphics == null || index == _gazeHoverIndex) return;
+        for (int i = 0; i < _segmentGraphics.Length; i++)
+        {
+            if (_segmentGraphics[i] == null) continue;
+            _segmentGraphics[i].color = i == index ? segmentHoverColor : segmentColor;
+        }
+        _gazeHoverIndex = index;
+    }
+
+    /// <summary>Programmatic wedge activation (gaze-pinch path). Fires the
+    /// same OnActionClicked event a Button click would.</summary>
+    public void ClickAction(ObjectActionMenuAction action)
+    {
+        if (!ConsumeActionGate())
+        {
+            Debug.Log($"[ObjectActionMenu] duplicate gaze-pinch action ignored action={action}");
+            return;
+        }
+        Debug.Log($"[ObjectActionMenu] action selected via gaze-pinch action={action}");
+        OnActionClicked?.Invoke(action);
+    }
+
     public void Build()
     {
         ClearChildren();
+        _segmentGraphics = new RadialMenuSegmentGraphic[Actions.Length];
+        _gazeHoverIndex = -1;
 
         RectTransform rect = GetComponent<RectTransform>();
         if (rect != null) rect.sizeDelta = new Vector2(radius * 2f, radius * 2f);
@@ -93,6 +164,7 @@ public class ObjectActionRadialMenu : MonoBehaviour
         graphic.innerRadius = innerRadius;
         graphic.outerRadius = radius;
         graphic.color = segmentColor;
+        _segmentGraphics[index] = graphic;
 
         Button button = go.AddComponent<Button>();
         button.targetGraphic = graphic;
@@ -107,6 +179,11 @@ public class ObjectActionRadialMenu : MonoBehaviour
         ObjectActionMenuAction action = Actions[index];
         button.onClick.AddListener(() =>
         {
+            if (!ConsumeActionGate())
+            {
+                Debug.Log($"[ObjectActionMenu] duplicate button click ignored action={action}");
+                return;
+            }
             Debug.Log($"[ObjectActionMenu] action button clicked action={action}");
             OnActionClicked?.Invoke(action);
         });

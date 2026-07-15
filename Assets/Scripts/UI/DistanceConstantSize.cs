@@ -32,6 +32,8 @@ public class DistanceConstantSize : MonoBehaviour
     public bool floorAtAuthoredSize = true;
     [Tooltip("Hard upper cap on the per-axis scale multiplier so far cards don't blow up.")]
     [Range(1.0f, 10.0f)] public float maxScaleMultiplier = 4.0f;
+    [Tooltip("Extra multiplier applied ON TOP of the distance compensation. Used by hover feedback (bubble grows while gazed/ray-hovered). 1 = neutral.")]
+    [HideInInspector] public float externalMultiplier = 1f;
 
     Vector3 _baseScale = Vector3.one;
     bool _captured;
@@ -56,7 +58,7 @@ public class DistanceConstantSize : MonoBehaviour
         float mult = d / refD;
         if (floorAtAuthoredSize && mult < 1f) mult = 1f;
         mult = Mathf.Clamp(mult, 0.01f, maxScaleMultiplier);
-        transform.localScale = _baseScale * mult;
+        transform.localScale = _baseScale * (mult * Mathf.Max(0.01f, externalMultiplier));
     }
 
     void CaptureBaseScale()

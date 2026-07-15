@@ -177,7 +177,9 @@ public class VlmResultReceiver : MonoBehaviour
     }
 
     [Header("Network")]
-    public int port = 5006;
+    [Tooltip("Optional explicit asset; when null, Resources/NetworkSettings.asset is used. The listen port comes ONLY from NetworkSettings (resultUdpPort).")]
+    public NetworkSettings networkSettings;
+    private int port = 5006;
     public bool verboseLogging = true;
 
     [Header("Object action menu")]
@@ -198,7 +200,22 @@ public class VlmResultReceiver : MonoBehaviour
     private volatile bool _running;
     private readonly ConcurrentQueue<QueueEntry> _queue = new ConcurrentQueue<QueueEntry>();
 
-    void OnEnable() { StartListening(); }
+    void OnEnable()
+    {
+        ApplyNetworkSettings();
+        StartListening();
+    }
+
+    void ApplyNetworkSettings()
+    {
+        NetworkSettings settings = networkSettings != null ? networkSettings : NetworkSettings.Instance;
+        if (settings == null)
+        {
+            Debug.LogWarning($"[VlmResultReceiver] NetworkSettings asset missing -- falling back to built-in default listen port {port}.");
+            return;
+        }
+        if (settings.resultUdpPort > 0) port = settings.resultUdpPort;
+    }
     void OnDisable() { StopListening(); }
     void OnApplicationQuit() { StopListening(); }
 

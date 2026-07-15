@@ -31,6 +31,8 @@ public class NetworkSettings : ScriptableObject
     [Header("Ports")]
     [Tooltip("UDP port Python listens on for GESTURE_EVENT / ASK_QUESTION / VOICE_COMMAND / OBJECT_ACTION.")]
     public int commandUdpPort = 5005;
+    [Tooltip("UDP port Unity listens on for VLM_RESULT / stream packets from Python (must match config.UNITY_RESULT_PORT in MacProgram).")]
+    public int resultUdpPort = 5006;
     [Tooltip("HTTP port for the voice server (ask_voice, voice_command, object_ui endpoints).")]
     public int voiceHttpPort = 5007;
 

@@ -10,10 +10,15 @@ public class MsgSender : MonoBehaviour
     public static MsgSender Instance { get; private set; }
 
     [Header("Network")]
-    [Tooltip("Optional. When assigned (or when Resources/NetworkSettings.asset exists), serverIP/port below are ignored and the shared asset drives the address instead. Leave null to use the fields below as-is.")]
+    [Tooltip("Optional explicit asset; when null, Resources/NetworkSettings.asset is used. The Mac address and port are configured ONLY through NetworkSettings -- there is no per-component override.")]
     public NetworkSettings networkSettings;
-    public string serverIP = "192.168.0.3";
-    public int port = 5005;
+    // Resolved from NetworkSettings at Start. Deliberately NOT serialized so
+    // the shared asset stays the single source of truth across scenes.
+    private string serverIP = "192.168.0.3";
+    private int port = 5005;
+
+    /// <summary>Resolved MacProgram host (read-only; see NetworkSettings).</summary>
+    public string ServerIP => serverIP;
 
     [Header("Assign from Input Actions")]
     public EyeGazeReader eyeGazeReader;
@@ -49,14 +54,17 @@ public class MsgSender : MonoBehaviour
         ResolveCaptureContextRegistry();
     }
 
-    // Pull address + port from the shared NetworkSettings asset when it's
-    // available. Explicit inspector assignment wins; otherwise we probe
-    // Resources/NetworkSettings. Silently no-ops if neither is present, so
-    // the pre-existing serialized `serverIP` / `port` values keep working.
+    // Pull address + port from the shared NetworkSettings asset. Explicit
+    // inspector assignment wins; otherwise Resources/NetworkSettings is
+    // probed. When neither exists we warn and keep the built-in defaults.
     void ApplyNetworkSettings()
     {
         NetworkSettings settings = networkSettings != null ? networkSettings : NetworkSettings.Instance;
-        if (settings == null) return;
+        if (settings == null)
+        {
+            Debug.LogWarning($"[Study Log][SENDER] NetworkSettings asset missing -- falling back to built-in default {serverIP}:{port}. Create Resources/NetworkSettings.asset.");
+            return;
+        }
         if (!string.IsNullOrEmpty(settings.serverIP)) serverIP = settings.serverIP;
         if (settings.commandUdpPort > 0) port = settings.commandUdpPort;
         Debug.Log($"[Study Log][SENDER] Network config from NetworkSettings: {serverIP}:{port}");
@@ -114,6 +122,15 @@ public class MsgSender : MonoBehaviour
 
         string packetType = "GAZE";
 
+        // Head rotation rides along so the Mac side can turn the camera-local
+        // gaze back into a world ray and compensate head motion when mapping
+        // the trail onto a gesture-start frame. Wire format:
+        //   GAZE,seq,t,tracked,gx,gy,gz,qx,qy,qz,qw   (11 fields)
+        // Old 7-field packets remain parseable on the receiver.
+        Quaternion headRot = eyeGazeReader != null
+            ? eyeGazeReader.LatestHeadRotation
+            : (referenceCamera != null ? referenceCamera.transform.rotation : Quaternion.identity);
+
         string msg = string.Join(",",
             packetType,
             seq.ToString(CultureInfo.InvariantCulture),
@@ -121,7 +138,11 @@ public class MsgSender : MonoBehaviour
             (isTracked ? 1 : 0).ToString(CultureInfo.InvariantCulture),
             localGazeDir.x.ToString("F6", CultureInfo.InvariantCulture),
             localGazeDir.y.ToString("F6", CultureInfo.InvariantCulture),
-            localGazeDir.z.ToString("F6", CultureInfo.InvariantCulture)
+            localGazeDir.z.ToString("F6", CultureInfo.InvariantCulture),
+            headRot.x.ToString("F5", CultureInfo.InvariantCulture),
+            headRot.y.ToString("F5", CultureInfo.InvariantCulture),
+            headRot.z.ToString("F5", CultureInfo.InvariantCulture),
+            headRot.w.ToString("F5", CultureInfo.InvariantCulture)
         );
 
         seq++;
