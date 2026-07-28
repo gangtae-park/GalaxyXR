@@ -19,6 +19,14 @@ public class VoiceHandTrigger : MonoBehaviour
     public bool useFallbackLeftHandPinch = true;
     public bool verboseLogging = true;
 
+    [Header("Palm-up gate")]
+    [Tooltip("Only count the pinch hold while the left palm faces the sky. Kills accidental triggers from pinches made in normal hand poses. Disable when driving with controllers (no hand joints -> gate always blocks).")]
+    public bool requirePalmUp = true;
+    [Tooltip("Max angle (degrees) between the palm normal and world up for the hold to count. 45 = comfortably 'palm up'; smaller = stricter.")]
+    [Range(10f, 90f)] public float palmUpMaxAngle = 45f;
+    [Tooltip("Flip if the gate feels inverted on this device (triggers palm-DOWN instead of palm-up).")]
+    public bool invertPalmNormal = false;
+
     [Header("Status (read-only)")]
     [SerializeField] private float holdTime;
 
@@ -62,6 +70,14 @@ public class VoiceHandTrigger : MonoBehaviour
             return;
         }
 
+        // Palm must face the sky for the WHOLE hold -- pinching in a normal
+        // hand pose no longer accumulates hold time.
+        if (requirePalmUp && !LeftHandPalmUp.IsPalmUp(palmUpMaxAngle, invertPalmNormal))
+        {
+            ResetHold();
+            return;
+        }
+
         holdTime += Time.unscaledDeltaTime;
         if (_triggeredThisHold || holdTime < holdSeconds) return;
         if (Time.unscaledTime - _lastTriggerTime < cooldownSeconds) return;
@@ -87,6 +103,7 @@ public class VoiceHandTrigger : MonoBehaviour
         }
 
         if (verboseLogging) Debug.Log("[VoiceHandTrigger] left-hand pinch hold detected; starting voice input.");
+        MsgSender.Instance?.SendStudyEvent("input_start", "voice_listen");
         voiceInputManager.StartListening();
     }
 

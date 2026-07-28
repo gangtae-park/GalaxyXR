@@ -63,3 +63,8 @@ Thumbs.db
 # Python cache (if scripts are added later)
 __pycache__/
 *.pyc
+
+# Stray ultralytics auto-downloads (real copies live in MacProgram/)
+mobileclip_blt.ts
+yoloe-*.pt
+yolov*.pt

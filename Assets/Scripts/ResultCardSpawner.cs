@@ -301,6 +301,19 @@ public class ResultCardSpawner : MonoBehaviour
         string gesture = payload.gesture;
         if (string.IsNullOrEmpty(gesture)) return;
         if (gesture == "ObjectUI") return;
+        if (gesture == "StudyCountdown") return;  // handled by StudySessionController
+
+        // User-study milestone: the moment a result reaches the card layer.
+        // Two exceptions route through their own hooks instead:
+        //   - Ask's phase-1 'object_recognized' payload only opens the
+        //     AskQuestionCard; the AskResultCard logs from SpawnStreamingAskCard.
+        //   - Save's ok payloads only open the SaveNoteCard input UI (or, for
+        //     voice, commit directly); the StickyNote spawn logs from
+        //     NoteManager.SpawnSticky.
+        bool saveHandledByNoteManager = gesture == "Save" && payload.status == "ok";
+        if (payload.stage != "object_recognized" && !saveHandledByNoteManager)
+            MsgSender.Instance?.SendStudyEvent("result_card_spawn", $"{gesture}/{payload.status}");
+
         if (gesture == "VoiceAsk")
         {
             SpawnVoiceResultCard(payload);
@@ -914,6 +927,9 @@ public class ResultCardSpawner : MonoBehaviour
             // placeholder title until then so the card isn't blank.
             _streamingAskCard.BeginStreaming("...", question);
         }
+        // User-study milestone: the AskResultCard replacing the question
+        // card IS Ask's result card.
+        MsgSender.Instance?.SendStudyEvent("result_card_spawn", "Ask/ok");
         if (verboseLogging)
             Debug.Log($"[ResultCardSpawner] Ask streaming card spawned stream_id={payload.stream_id}");
     }

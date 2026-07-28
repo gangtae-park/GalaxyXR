@@ -66,7 +66,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: KOR
+  m_text: Korean
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}
   m_sharedMaterial: {fileID: -8081388478298098407, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}
@@ -93,8 +93,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 18
-  m_fontSizeBase: 18
+  m_fontSize: 15
+  m_fontSizeBase: 15
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -681,7 +681,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 30}
+  m_SizeDelta: {x: 0, y: 15}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &7951597324684773124
 CanvasRenderer:
@@ -738,8 +738,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 24
-  m_fontSizeBase: 24
+  m_fontSize: 15
+  m_fontSizeBase: 15
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -959,7 +959,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 450, y: 220}
+  m_SizeDelta: {x: 450, y: 150}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!223 &9051465043832001224
 Canvas:
@@ -1282,7 +1282,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: ENG
+  m_text: Italian
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}
   m_sharedMaterial: {fileID: -8081388478298098407, guid: 62daacbe95541497dbd08564681dd8c4, type: 2}
@@ -1309,8 +1309,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 18
-  m_fontSizeBase: 18
+  m_fontSize: 15
+  m_fontSizeBase: 15
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -1471,7 +1471,7 @@ MonoBehaviour:
     m_Top: 20
     m_Bottom: 10
   m_ChildAlignment: 1
-  m_Spacing: 15
+  m_Spacing: 8
   m_ChildForceExpandWidth: 1
   m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1
@@ -1516,7 +1516,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 25}
+  m_SizeDelta: {x: 0, y: 18}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &3631332658505713581
 MonoBehaviour:
@@ -1738,7 +1738,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 100}
+  m_SizeDelta: {x: 0, y: 70}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &4099092580508851939
 MonoBehaviour:

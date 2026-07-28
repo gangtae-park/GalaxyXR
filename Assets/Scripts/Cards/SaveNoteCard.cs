@@ -147,6 +147,9 @@ public class SaveNoteCard : MonoBehaviour
             noteField.caretPosition = noteField.text.Length;
         }
         SetMicStatus(idleStatusMessage);
+        // User-study milestone: note dictation finished = Save's input_end
+        // (gesture/UI recognition earlier was only save_point).
+        MsgSender.Instance?.SendStudyEvent("input_end", "save_note_dictated");
         if (verboseLogging) Debug.Log($"[SaveNoteCard] STT FINAL '{transcript}'");
     }
 

@@ -12,8 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d3a17ec6b8f24c9a9e7ba0d1c53b4f88, type: 3}
   m_Name: NetworkSettings
   m_EditorClassIdentifier: 
-  serverIP: 192.168.0.8
+  serverIP: 192.168.0.16
   commandUdpPort: 5005
+  resultUdpPort: 5006
   voiceHttpPort: 5007
   askVoicePath: /ask_voice
   voiceCommandPath: /voice_command

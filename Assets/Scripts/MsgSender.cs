@@ -290,6 +290,17 @@ public class MsgSender : MonoBehaviour
         return lastRequestId;
     }
 
+    /// <summary>User-study milestone (session_start at the beep, result card
+    /// spawn, input_start, ...). Wire format: STUDY,EVENT,&lt;name&gt;,&lt;detail&gt; --
+    /// MacProgram's study logger timestamps it into the session CSV on arrival.</summary>
+    public void SendStudyEvent(string eventName, string detail = "")
+    {
+        if (string.IsNullOrEmpty(eventName)) return;
+        string safeName = eventName.Replace(",", ";").Replace("\n", " ");
+        string safeDetail = (detail ?? "").Replace(",", ";").Replace("\n", " ");
+        SendPacket(string.Join(",", "STUDY", "EVENT", safeName, safeDetail));
+    }
+
     void SendTextPacket(string packetType, string text, string logLabel)
     {
         if (string.IsNullOrWhiteSpace(text))

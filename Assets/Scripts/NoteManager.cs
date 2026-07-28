@@ -36,6 +36,10 @@ public class NoteManager : MonoBehaviour
     public bool singleOpenCard = true;
     [Tooltip("Multiplier applied to the StickyNote prefab's localScale at spawn. 1 = prefab scale unchanged; 0.5 = half size; 0.1 = one-tenth, etc.")]
     public float stickyNoteScale = 0.3f;
+    [Tooltip("Spawn the StickyNote at the SaveNoteCard's bottom-left corner instead of its centre -- the sticky is far smaller than the card, so the corner reads as 'attached' rather than floating where the card used to be.")]
+    public bool stickyAtCardBottomLeft = true;
+    [Tooltip("Extra offset from that corner along the card's local axes (x = right, y = up), in world metres. Use small positive values to nudge the sticky inward.")]
+    public Vector2 stickyCornerOffset = Vector2.zero;
     public bool verboseLogging = true;
 
     [Serializable]
@@ -154,7 +158,13 @@ public class NoteManager : MonoBehaviour
 
     void HandleSaveCommitted(SaveNoteCard card, string text)
     {
-        Vector3 pos = card.transform.position;
+        // User-study milestone: the Save button press is Save's result_sent
+        // (the earlier stage='ack' packet only opened this input card).
+        MsgSender.Instance?.SendStudyEvent("result_sent", "Save/ok");
+
+        // Sticky position must be computed BEFORE CloseOpenCard destroys the
+        // card -- GetWorldCorners needs the live RectTransform.
+        Vector3 pos = GetStickySpawnPos(card);
         Quaternion rot = card.transform.rotation;
         string objectId = card.ObjectId;
         string objectName = card.ObjectName;
@@ -250,6 +260,10 @@ public class NoteManager : MonoBehaviour
         }
         sticky.Bind(note.id, note.objectId);
         sticky.OnPinched += HandleStickyPinched;
+        // User-study milestone: the StickyNote IS Save's result card. Fires
+        // for the gesture/UI commit path and the voice CommitNoteDirectly
+        // path alike (the generic ResultCardSpawner hook skips Save).
+        MsgSender.Instance?.SendStudyEvent("result_card_spawn", "Save/ok");
         return sticky;
     }
 
@@ -326,6 +340,28 @@ public class NoteManager : MonoBehaviour
     }
 
     // ---------- helpers ----------
+
+    /// <summary>World position for the StickyNote: the SaveNoteCard's
+    /// bottom-left corner (plus the inspector offset), falling back to the
+    /// card centre when disabled or no RectTransform is found. Corners come
+    /// from the live RectTransform, so DistanceConstantSize scaling is
+    /// already baked in.</summary>
+    Vector3 GetStickySpawnPos(SaveNoteCard card)
+    {
+        Vector3 centre = card.transform.position;
+        if (!stickyAtCardBottomLeft) return centre;
+
+        RectTransform rect = card.GetComponent<RectTransform>();
+        if (rect == null) rect = card.GetComponentInChildren<RectTransform>();
+        if (rect == null) return centre;
+
+        Vector3[] corners = new Vector3[4];
+        rect.GetWorldCorners(corners);  // 0 = bottom-left, world space
+        Vector3 pos = corners[0]
+            + card.transform.right * stickyCornerOffset.x
+            + card.transform.up * stickyCornerOffset.y;
+        return pos;
+    }
 
     Note FindNote(string id)
     {

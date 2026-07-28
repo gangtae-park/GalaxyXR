@@ -165,6 +165,13 @@ public class ObjectDetectionBubble : MonoBehaviour, IPointerClickHandler
         }
         _lastClickTime = Time.unscaledTime;
 
+        // User-study milestone: first bubble selection = UI input start.
+        // Detail carries WHICH object's bubble was picked (DB key, matching
+        // the "ui_action:<action>/<id>" format input_end uses).
+        string clickedId = detection != null ? detection.objectId : "";
+        MsgSender.Instance?.SendStudyEvent("input_start",
+            string.IsNullOrEmpty(clickedId) ? "ui_bubble_select" : $"ui_bubble_select:{clickedId}");
+
         string label = detection != null ? detection.label : "";
         Vector3 worldPos = transform.position;
         Debug.Log($"[OBJECT_BUBBLE] clicked label={label} request_id={requestId} world=({worldPos.x:F3},{worldPos.y:F3},{worldPos.z:F3})");
